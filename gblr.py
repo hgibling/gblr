@@ -6,7 +6,6 @@ import math
 import pandas as pd
 import pysam
 import os
-# from scipy.stats import poisson
 import sys
 
 def get_sequences_from_fasta(fn):
@@ -21,74 +20,42 @@ def reverse_complement(s):
     reverse_complement = "".join(complement.get(base, base) for base in reversed(s))
     return reverse_complement
 
-# def log_factorial(number):
-#     result = 0
-#     while number > 0:
-#         result += math.log(number)
-#         number -= 1
-#     return(result)
-
-# def log_poisson_pmf_manual(number, lam):
-#     log_factorial_num = log_factorial(number)
-#     result = (number * math.log(lam)) - lam - log_factorial_num
-#     return(result)
-
-# def log_poisson_pmf_manual(number, lam):
-#     e = math.exp(1)
-#     result = ((lam ** number) * (e ** (-lam))) / math.gamma(number + 1) # can't use math.factorial on non-integers
-#     return(math.log(result))
-
-def calculate_lambda(num_reads, num_znfs, read_length, znf_length):
-    lam = (num_reads / num_znfs)*((num_znfs * znf_length) + (read_length * num_znfs) - num_znfs) / ((num_znfs * znf_length) + read_length - 1)
-    return(lam)
-
 parser = argparse.ArgumentParser()
-parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file of allele sequences')
+parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file of allele sequences with flanking sequences')
 parser.add_argument('-r', '--reads', type=str, required=True, help='fasta/q file of sequencing reads')
-parser.add_argument('-R', '--read-length', type=int, required=True, help='length of reads') # TODO calculate from input files
-# parser.add_argument('-z', '--zinc-fingers', type=str, required=True, help='csv file of which zinc fingers are in each allele and their positions (allele names must match those provided in allele fasta)')
-# parser.add_argument('-Z', '--zinc-finger-length', type=int, default=84, help='length of zinc fingers') # TODO calculate from input files
-parser.add_argument('-f', '--flank-length', type=int, default=10000, help='length of sequences flanking zinc finger region')
+parser.add_argument('-f', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-e', '--max-edit-distance', type=int, default=20, help='maximum edit distance allowed for read corrections')
-# parser.add_argument('-l', '--lam', type=float, default=0, help='poisson pmf lambda value for scoring (ignore or set to 0 to calculate based on mean znf count instead)')
-parser.add_argument('-d', '--debug', type=int, default=0, help='toggle printing of read znf content for debugging')
+parser.add_argument('-d', '--debug', type=int, default=0, help='toggle printing of content for debugging')
 args = parser.parse_args()
 
-# get allele sequences, reads, and zinc finger content
+### get allele sequences, reads, and flanking sequences length
 alleles = get_sequences_from_fasta(args.alleles)
 reads = pysam.FastxFile(args.reads)
-# znfs = pd.read_csv(args.zinc_fingers)
-# znfs_list = znfs.znfs.unique()
-# znfs_list.sort()
-# znf_length = args.zinc_finger_length
-read_length = args.read_length
-
-# modify position info for each allele due to flanks
 flank_length = args.flank_length
-# znfs.start = znfs.start + flank_length
-# znfs.end = znfs.end + flank_length
 
-# define variables
+### define variables
 num_quality_reads = 0
-# read_znf_counts = {}
 read_flank_counts = {}
-# num_znfs_in_reads = []
+edit_distances = {}
 
-# align each read against all alleles
+### align each read against all alleles
 for read in reads:
     best_distance = args.max_edit_distance
     best_allele = []
     start = []
     end = []
-    # read_znfs = []
-    # read_flanks = []
-
-    # check alignment for forward and reverse reads
+    
+    ### check alignment for forward and reverse reads
     for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
-        # check alignment to each allele
+        ### check alignment to each allele
         for allele_idx, allele in enumerate(alleles):
+            allele_length_no_end_flank = len(allele.sequence) - flank_length
             result = edlib.align(strand_sequence, allele.sequence, mode = "HW", task = "path")
-            # update variables if edit distance is acceptable or improved
+            ### update variables if edit distance is acceptable or improved
+            # ignore alignments that start after the last 50bp or end before the first 50bp of the variable region of interest
+            if (result['locations'][0][0] > (allele_length_no_end_flank - 50)) | (result['locations'][0][1] < (flank_length + 50))
+                read_flank_counts += 1
+                continue
             if result['editDistance'] < best_distance:
                 best_allele = [allele.name]
                 best_distance = result['editDistance']
@@ -99,11 +66,10 @@ for read in reads:
                 start.append(result['locations'][0][0])
                 end.append(result['locations'][0][1])
 
-    # keep only reads with acceptable edit distances to an allele
+    ### keep only reads with acceptable edit distances to an allele
     # case for single best allele
     if len(best_allele) ==  1:
         num_quality_reads += 1
-        # allele_znfs = znfs[znfs.allele == best_allele[0]].reset_index(drop=True)
         
         # reads that only align to right flank region
         if start[0] > max(allele_znfs.end):
