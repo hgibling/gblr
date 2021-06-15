@@ -42,6 +42,7 @@ num_flank_reads = 0
 num_bad_reads = 0
 allele_counts = {}
 edit_distances = []
+read_number = 0
 
 ### align each read against all alleles
 for read in reads:
@@ -49,6 +50,7 @@ for read in reads:
     best_allele = []
     start = []
     end = []
+    read_number += 1
     
     ### check alignment for forward and reverse reads
     for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
@@ -58,8 +60,9 @@ for read in reads:
             result = edlib.align(strand_sequence, allele.sequence, mode = "HW", task = "path")
             ### update variables if edit distance is acceptable or improved
             # ignore alignments that start after the last 50bp or end before the first 50bp of the variable region of interest
-            if (result['locations'][0][0] > (allele_length_no_end_flank - 50)) | (result['locations'][0][1] < (flank_length + 50))
-                num_flank_reads += 1
+            if result['locations'][0][0] > (allele_length_no_end_flank - 5):
+                continue
+            if result['locations'][0][1] < (flank_length + 5):
                 continue
             if result['editDistance'] < best_distance:
                 best_allele = [allele.name]
@@ -70,15 +73,13 @@ for read in reads:
                 best_allele.append(allele.name)
                 start.append(result['locations'][0][0])
                 end.append(result['locations'][0][1])
-            else:
-                num_bad_reads += 1
 
     ### consider only reads with acceptable edit distances to an allele
     ### case for single best allele
     if len(best_allele) ==  1:
         num_quality_reads += 1
         edit_distances.append(best_distance)
-        allele_counts[best_allele] = allele_counts.get(best_allele, 0) + 1
+        allele_counts[best_allele[0]] = allele_counts.get(best_allele[0], 0) + 1
         
     ### case where there are 2 or more equally best alleles
     elif len(best_allele) > 1:
@@ -91,12 +92,11 @@ for read in reads:
 
 ### print useful information
 print("Edit distance used: %d" % args.max_edit_distance, file=sys.stderr)
-print("Number of alleles tested: %d" % )
+print("Number of alleles tested: %d" % len(alleles), file=sys.stderr)
 print("Number of quality reads: %d" % num_quality_reads, file=sys.stderr)
 print("Number of low quality reads: %d" % num_bad_reads, file=sys.stderr)
 print("Number of reads aligning predominantly to flank sequences: %d" % num_flank_reads, file=sys.stderr)
 
 ### print resulting counts for each allele
-for allele, count in allele_counts.items():
-    print(allele, '\t', count)
-allele_count == 0:
+for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
+    print(allele, '\t', count, file=sys.stderr)
