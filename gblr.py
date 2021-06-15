@@ -97,6 +97,7 @@ print("Number of quality reads: %d" % num_quality_reads, file=sys.stderr)
 print("Number of low quality reads: %d" % num_bad_reads, file=sys.stderr)
 print("Number of reads aligning predominantly to flank sequences: %d" % num_flank_reads, file=sys.stderr)
 
-### print resulting counts for each allele
+### convert read counts to proportions of quality reads and print results
 for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
-    print(allele, '\t', count, file=sys.stderr)
+    allele_counts[allele] = allele_counts[allele] / num_quality_reads
+    print(allele, '\t', allele_counts[allele], file=sys.stderr)
