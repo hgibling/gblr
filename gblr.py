@@ -28,7 +28,7 @@ parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file
 parser.add_argument('-r', '--reads', type=str, required=True, help='fasta/q file of sequencing reads')
 parser.add_argument('-f', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-e', '--max-edit-distance', type=int, default=20, help='maximum edit distance allowed for read corrections')
-parser.add_argument('-d', '--debug', type=int, default=0, help='toggle printing of content for debugging')
+parser.add_argument('-d', '--diploid', type=bool, default=True, help='call diploid genotypes instead of haploid alleles')
 args = parser.parse_args()
 
 ### get allele sequences, reads, and flanking sequences length
