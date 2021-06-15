@@ -31,9 +31,6 @@ parser.add_argument('-e', '--max-edit-distance', type=int, default=20, help='max
 parser.add_argument('-d', '--diploid', action='store_true', help='call diploid genotypes instead of haploid alleles')
 args = parser.parse_args()
 
-if args.diploid == True:
-    print("diploid on")
-
 ### get allele sequences, reads, and flanking sequences length
 alleles = get_sequences_from_fasta(args.alleles)
 reads = pysam.FastxFile(args.reads)
@@ -92,7 +89,9 @@ for read in reads:
             allele_counts[best_allele[i]] = allele_counts.get(best_allele[i], 0) + 1/len(best_allele)
 
 ### convert read counts to proportions of quality reads
-allele_proportions = sorted(allele_counts.items(), key=lambda x: x[1], reverse=True)
+allele_proportions = {}
+for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
+    allele_proportions[allele] = allele_counts[allele] / num_quality_reads
 
 ### determine genotype likelihoods
 #if args.diploid:
@@ -106,5 +105,5 @@ print("Number of low quality reads: %d" % num_bad_reads, file=sys.stderr)
 print("Number of reads aligning predominantly to flank sequences: %d" % num_flank_reads, file=sys.stderr)
 
 ### print results
-for allele, proportion in allele_proportions:
+for allele, proportion in allele_proportions.items():
     print(allele, '\t', proportion, file=sys.stderr)
