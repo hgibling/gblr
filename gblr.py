@@ -28,8 +28,11 @@ parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file
 parser.add_argument('-r', '--reads', type=str, required=True, help='fasta/q file of sequencing reads')
 parser.add_argument('-f', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-e', '--max-edit-distance', type=int, default=20, help='maximum edit distance allowed for read corrections')
-parser.add_argument('-d', '--diploid', action='store_false', help='call diploid genotypes instead of haploid alleles')
+parser.add_argument('-d', '--diploid', action='store_true', help='call diploid genotypes instead of haploid alleles')
 args = parser.parse_args()
+
+if args.diploid == True:
+    print("diploid on")
 
 ### get allele sequences, reads, and flanking sequences length
 alleles = get_sequences_from_fasta(args.alleles)
@@ -88,6 +91,13 @@ for read in reads:
         for i, allele in enumerate(best_allele):
             allele_counts[best_allele[i]] = allele_counts.get(best_allele[i], 0) + 1/len(best_allele)
 
+### convert read counts to proportions of quality reads
+allele_proportions = sorted(allele_counts.items(), key=lambda x: x[1], reverse=True)
+
+### determine genotype likelihoods
+#if args.diploid:
+
+
 ### print useful information
 print("Edit distance used: %d" % args.max_edit_distance, file=sys.stderr)
 print("Number of alleles tested: %d" % len(alleles), file=sys.stderr)
@@ -95,7 +105,6 @@ print("Number of quality reads: %d" % num_quality_reads, file=sys.stderr)
 print("Number of low quality reads: %d" % num_bad_reads, file=sys.stderr)
 print("Number of reads aligning predominantly to flank sequences: %d" % num_flank_reads, file=sys.stderr)
 
-### convert read counts to proportions of quality reads and print results
-for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
-    allele_counts[allele] = allele_counts[allele] / num_quality_reads
-    print(allele, '\t', allele_counts[allele], file=sys.stderr)
+### print results
+for allele, proportion in allele_proportions:
+    print(allele, '\t', proportion, file=sys.stderr)
