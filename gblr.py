@@ -60,9 +60,7 @@ for read in reads:
             result = edlib.align(strand_sequence, allele.sequence, mode = "HW", task = "path")
             ### update variables if edit distance is acceptable or improved
             # ignore alignments that start after the last 50bp or end before the first 50bp of the variable region of interest
-            if result['locations'][0][0] > (allele_length_no_end_flank - 5):
-                continue
-            if result['locations'][0][1] < (flank_length + 5):
+            if ((result['locations'][0][0] > (allele_length_no_end_flank - 5)) or (result['locations'][0][1] < (flank_length + 5))):
                 continue
             if result['editDistance'] < best_distance:
                 best_allele = [allele.name]
