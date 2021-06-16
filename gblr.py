@@ -26,8 +26,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file of allele sequences with flanking sequences')
 parser.add_argument('-r', '--reads', type=str, required=True, help='fasta/q file of sequencing reads')
 parser.add_argument('-f', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
+parser.add_argument('-t', '--alignment-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-e', '--max-edit-distance', type=int, default=20, help='maximum edit distance allowed for read corrections')
 parser.add_argument('-d', '--diploid', action='store_true', help='call diploid genotypes instead of haploid alleles')
+parser.add_argument('-D', '--deliminator', type=str, default='\t', help='deliminator to use for output results')
+
 args = parser.parse_args()
 
 ### get allele sequences, reads, and flanking sequences length
@@ -41,6 +44,7 @@ num_flank_reads = 0
 num_bad_reads = 0
 allele_counts = {}
 edit_distances = []
+tolerance = args.alignment_tolerance
 
 ### align each read against all alleles
 for read in reads:
@@ -57,7 +61,7 @@ for read in reads:
             result = edlib.align(strand_sequence, allele.sequence, mode = "HW", task = "path")
             ### update variables if edit distance is acceptable or improved
             # ignore alignments that start after the last 50bp or end before the first 50bp of the variable region of interest
-            if ((result['locations'][0][0] > (allele_length_no_end_flank - 50)) or (result['locations'][0][1] < (flank_length + 50))):
+            if ((result['locations'][0][0] > (allele_length_no_end_flank - tolerance)) or (result['locations'][0][1] < (flank_length + tolerance))):
                 continue
             if result['editDistance'] < best_distance:
                 best_allele = [allele.name]
@@ -76,11 +80,12 @@ for read in reads:
         else:
             num_flank_reads += 1
 
+
     ### consider only reads with acceptable edit distances to an allele
     else: 
         num_quality_reads += 1
         edit_distances.append(best_distance)
-        print(best_distance)
+
 
         ### case for single best allele
         if len(best_allele) ==  1:
@@ -107,7 +112,7 @@ for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=T
 
 
 ### print useful information
-print("Edit distance used: %d" % args.max_edit_distance, file=sys.stderr)
+print("Max edit distance allowed: %d" % args.max_edit_distance, file=sys.stderr)
 print("Edit distance stats: Min: %d, Median: %d, Max: %d" % (ED_min, ED_mean, ED_max), file=sys.stderr)
 print("Number of alleles tested: %d" % len(alleles), file=sys.stderr)
 print("Number of quality reads: %d" % num_quality_reads, file=sys.stderr)
@@ -115,5 +120,7 @@ print("Number of low quality reads: %d" % num_bad_reads, file=sys.stderr)
 print("Number of reads aligning predominantly to flank sequences: %d" % num_flank_reads, file=sys.stderr)
 
 ### print results
+delim = args.deliminator
+
 for allele, proportion in allele_proportions.items():
-    print(allele, '\t', proportion, file=sys.stderr)
+    print(allele, delim, proportion, file=sys.stderr)
