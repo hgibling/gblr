@@ -29,7 +29,7 @@ parser.add_argument('-f', '--flank-length', type=int, default=10000, help='lengt
 parser.add_argument('-t', '--alignment-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-e', '--max-edit-distance', type=int, default=20, help='maximum edit distance allowed for read corrections')
 parser.add_argument('-d', '--diploid', action='store_true', help='call diploid genotypes instead of haploid alleles')
-parser.add_argument('-D', '--deliminator', type=str, default='\t', help='deliminator to use for output results')
+parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for output results')
 
 args = parser.parse_args()
 
@@ -120,7 +120,5 @@ print("Number of low quality reads: %d" % num_bad_reads, file=sys.stderr)
 print("Number of reads aligning predominantly to flank sequences: %d" % num_flank_reads, file=sys.stderr)
 
 ### print results
-delim = args.deliminator
-
 for allele, proportion in allele_proportions.items():
-    print(allele, delim, proportion, file=sys.stderr)
+    print(allele, args.delimiter, proportion, file=sys.stderr)
