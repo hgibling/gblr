@@ -1,21 +1,24 @@
 #! /usr/bin/env python
 
 ### import libraries
+from collections import defaultdict
 import argparse
 import edlib
 import math
-import pysam
 import os
+import pysam
 import sys
 
 ### define functions
+# read in fastx file and save name and sequence from each entry
 def get_sequences_from_fasta(file_name):
-    out = list()
+    out = {}
     file_handle = pysam.FastxFile(file_name)
-    for sequence in file_handle:
-        out.append(sequence)
+    for fasta in file_handle:
+        out[fasta.name] = fasta.sequence
     return out
 
+# get reverse complement of a sequence
 def reverse_complement(sequence):
     complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'}
     reverse_complement = "".join(complement.get(base, 'N') for base in reversed(sequence))
@@ -30,82 +33,81 @@ parser.add_argument('-t', '--alignment-tolerance', type=int, default=50, help='m
 parser.add_argument('-e', '--max-edit-distance', type=int, default=20, help='maximum edit distance allowed for read corrections')
 parser.add_argument('-d', '--diploid', action='store_true', help='call diploid genotypes instead of haploid alleles')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for output results')
-
 args = parser.parse_args()
 
-### get allele sequences, reads, and flanking sequences length
+### get allele and read sequences
 alleles = get_sequences_from_fasta(args.alleles)
 reads = pysam.FastxFile(args.reads)
-flank_length = args.flank_length
 
 ### define variables
-num_quality_reads = 0
-num_flank_reads = 0
-num_bad_reads = 0
-allele_counts = {}
+quality_reads = set()
+flank_reads = set()
+bad_reads = set()
+allele_counts = defaultdict(int)
 edit_distances = []
-tolerance = args.alignment_tolerance
 
 ### align each read against all alleles
 for read in reads:
     best_distance = args.max_edit_distance
     best_allele = []
-    start = []
-    end = []
     
     ### check alignment for forward and reverse reads
     for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
         ### check alignment to each allele
-        for allele_idx, allele in enumerate(alleles):
-            allele_length_no_end_flank = len(allele.sequence) - flank_length
-            result = edlib.align(strand_sequence, allele.sequence, mode = "HW", task = "path")
-            ### update variables if edit distance is acceptable or improved
-            # ignore alignments that start after the last 50bp or end before the first 50bp of the variable region of interest
-            if ((result['locations'][0][0] > (allele_length_no_end_flank - tolerance)) or (result['locations'][0][1] < (flank_length + tolerance))):
+        for allele_name, allele_sequence in alleles.items():
+            result = edlib.align(strand_sequence, allele_sequence, mode = "HW", task = "path")
+
+            ### make sure specified flank length not longer than the allele sequence
+            allele_length_no_end_flank = len(allele_sequence) - args.flank_length
+            if allele_length_no_end_flank <= 0:
+                exit("ERROR: flank length argument too long for allele sequences provided (failed at allele %s)" % allele_name)
+
+            ### ignore alignments that do not meet the minimum number of bases a read must align to in the variable region of interest
+            # check if alignment starts after the 3' minimum alignment threshold, or ends before the 5' minimum threshold
+            if ((result['locations'][0][0] > (allele_length_no_end_flank - args.alignment_tolerance)) or (result['locations'][0][1] < (args.flank_length + args.alignment_tolerance))):
+                flank_reads.add(read.name)
                 continue
+
+            ### consider alignments that meet the maximum edit distance threshold
+            # update variables if edit distance is under acceptable threshold or is improved from a previous acceptable alignment
             if result['editDistance'] < best_distance:
-                best_allele = [allele.name]
+                best_allele = [allele_name]
                 best_distance = result['editDistance']
-                start = [result['locations'][0][0]]
-                end = [result['locations'][0][1]]
+                quality_reads.add(read.name)
+            # add to list of best alleles if edit distance is the same as a previously determined acceptable alignment
             elif result['editDistance'] == best_distance:
-                best_allele.append(allele.name)
-                start.append(result['locations'][0][0])
-                end.append(result['locations'][0][1])
+                best_allele.append(allele_name)
+                quality_reads.add(read.name)      
 
-    ### get metrics for unused reads
-    if len(best_allele) == 0:
-        if result['editDistance'] > best_distance:
-            num_bad_reads += 1
-        else:
-            num_flank_reads += 1
+    ### get metrics for read classes
+    # if alignment to one allele was quality but to the flank sequences in another allele, only consider quality alignment 
+    if read.name in flank_reads and quality_reads:
+        flank_reads.remove(read.name)
+    # if read didn't align to any part of the allele sequence under the edit distance threshold, consider it low quality
+    if (read.name not in flank_reads) and (read.name not in quality_reads):
+        bad_reads.add(read.name)
 
-
-    ### consider only reads with acceptable edit distances to an allele
-    else: 
-        num_quality_reads += 1
+    ### consider only reads with acceptable edit distances to an allele and add count to best allele(s)
+    # single best allele
+    if len(best_allele) ==  1:
         edit_distances.append(best_distance)
-
-
-        ### case for single best allele
-        if len(best_allele) ==  1:
-            allele_counts[best_allele[0]] = allele_counts.get(best_allele[0], 0) + 1
+        allele_counts[best_allele[0]] += 1    
             
-        ### case where there are 2 or more equally best alleles
-        else:
-            # iterate through all best alleles and count proportions
-            for i, allele in enumerate(best_allele):
-                allele_counts[best_allele[i]] = allele_counts.get(best_allele[i], 0) + 1/len(best_allele)
+    # two or more equally best alleles
+    elif len(best_allele) > 1:
+        edit_distances.append(best_distance)
+        # iterate through all best alleles and count proportions
+        for i, allele in enumerate(best_allele):
+            allele_counts[best_allele[i]] += 1/len(best_allele)
 
 ### calculate stats for edit distances between the quality reads and the best alleles
 ED_max = max(edit_distances)
 ED_min = min(edit_distances)
 ED_mean = sum(edit_distances) / len(edit_distances)
 
-### convert read counts to proportions of quality reads
 allele_proportions = {}
 for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
-    allele_proportions[allele] = allele_counts[allele] / num_quality_reads
+    allele_proportions[allele] = allele_counts[allele] / len(quality_reads)
 
 ### determine genotype likelihoods
 #if args.diploid:
@@ -115,10 +117,10 @@ for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=T
 print("Max edit distance allowed: %d" % args.max_edit_distance, file=sys.stderr)
 print("Edit distance stats: Min: %d, Median: %d, Max: %d" % (ED_min, ED_mean, ED_max), file=sys.stderr)
 print("Number of alleles tested: %d" % len(alleles), file=sys.stderr)
-print("Number of quality reads: %d" % num_quality_reads, file=sys.stderr)
-print("Number of low quality reads: %d" % num_bad_reads, file=sys.stderr)
-print("Number of reads aligning predominantly to flank sequences: %d" % num_flank_reads, file=sys.stderr)
+print("Number of quality reads: %d" % len(quality_reads), file=sys.stderr)
+print("Number of low quality reads: %d" % len(bad_reads), file=sys.stderr)
+print("Number of reads aligning predominantly to flank sequences: %d" % len(flank_reads), file=sys.stderr)
 
 ### print results
 for allele, proportion in allele_proportions.items():
-    print(allele, args.delimiter, proportion, file=sys.stderr)
+    print(allele, args.delimiter, proportion)
