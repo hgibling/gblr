@@ -30,7 +30,7 @@ parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file
 parser.add_argument('-r', '--reads', type=str, required=True, help='fasta/q file of sequencing reads')
 parser.add_argument('-f', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-t', '--alignment-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the variable region of interest')
-parser.add_argument('-m', '--max-mismatch', type=int, default=0.05, help='maximum proportion of a read that can be mismatched/indels relative to an allele')
+parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-d', '--diploid', action='store_true', help='call diploid genotypes instead of haploid alleles')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for output results')
 args = parser.parse_args()
@@ -81,7 +81,7 @@ for read in reads:
             # add to list of best alleles if edit distance is the same as a previously determined acceptable alignment
             elif result['editDistance'] == best_distance:
                 best_allele.append(allele_name)
-                quality_reads.add(read.name)      
+                quality_reads.add(read.name) 
 
     ### get metrics for read classes
     # if alignment to one allele was quality but to the flank sequences in another allele, only consider quality alignment 
@@ -118,7 +118,7 @@ for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=T
 
 
 ### print useful information
-print("Max edit distance allowed: %d" % args.max_edit_distance, file=sys.stderr)
+print("Max proportion of read that is mismatches/indels: %d" % args.max_mismatch, file=sys.stderr)
 print("Edit distance stats: Min: %d, Median: %d, Max: %d" % (ED_min, ED_mean, ED_max), file=sys.stderr)
 print("Number of alleles tested: %d" % len(alleles), file=sys.stderr)
 print("Number of quality reads: %d" % len(quality_reads), file=sys.stderr)
