@@ -30,10 +30,14 @@ parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file
 parser.add_argument('-r', '--reads', type=str, required=True, help='fasta/q file of sequencing reads')
 parser.add_argument('-f', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-t', '--alignment-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the variable region of interest')
-parser.add_argument('-e', '--max-edit-distance', type=int, default=20, help='maximum edit distance allowed for read corrections')
+parser.add_argument('-m', '--max-mismatch', type=int, default=0.05, help='maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-d', '--diploid', action='store_true', help='call diploid genotypes instead of haploid alleles')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for output results')
 args = parser.parse_args()
+
+### check arguments
+if args.max_mismatch < 0 or args.max_mismatch > 1:
+    exit("ERROR: max-mistmatch argument must be a proportion (between 0 and 1). Check parameters.")
 
 ### get allele and read sequences
 alleles = get_sequences_from_fasta(args.alleles)
@@ -48,7 +52,7 @@ edit_distances = []
 
 ### align each read against all alleles
 for read in reads:
-    best_distance = args.max_edit_distance
+    best_distance = args.max_mismatch * len(read.sequence)
     best_allele = []
     
     ### check alignment for forward and reverse reads
@@ -60,7 +64,7 @@ for read in reads:
             ### make sure specified flank length not longer than the allele sequence
             allele_length_no_end_flank = len(allele_sequence) - args.flank_length
             if allele_length_no_end_flank <= 0:
-                exit("ERROR: flank length argument too long for allele sequences provided (failed at allele %s)" % allele_name)
+                exit("ERROR: flank-length argument too long for allele sequences provided (failed at allele %s)." % allele_name)
 
             ### ignore alignments that do not meet the minimum number of bases a read must align to in the variable region of interest
             # check if alignment starts after the 3' minimum alignment threshold, or ends before the 5' minimum threshold
