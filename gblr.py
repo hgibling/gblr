@@ -49,7 +49,7 @@ reads = pysam.FastxFile(args.reads)
 quality_reads = set()
 flank_reads = set()
 bad_reads = set()
-allele_names = list(allele.keys())
+allele_names = list(alleles.keys())
 allele_lengths = dict.fromkeys(allele_names)
 allele_counts = defaultdict(int)
 edit_distances = []
@@ -128,10 +128,11 @@ if args.quick_count:
 
 ### for generating full likelihood scores:
 else:
+    read_mismatched_proportions = {}
 
     ### align each read against all alleles
     for read in reads:
-        temp_dict = dict.fromkeys(allele_names)
+        read_distance_dict = dict.fromkeys(allele_names)
 
         ### check alignment to each allele
         for allele_name, allele_sequence in alleles.items():
@@ -146,14 +147,25 @@ else:
                 if ((result['locations'][0][0] > (allele_lengths[allele_name] - args.alignment_tolerance)) or (result['locations'][0][1] < (args.flank_length + args.alignment_tolerance))):
                     flank_reads.add(read.name)
                     continue
+
+                ### if acceptable edit distance, store lowest proportion of mismatched read bases between forward and reverse read sequences
+                if result['editDistance'] <= best_distance:
+                    read_distance_dict[allele_name] = result['editDistance'] / len(read.sequence)
+                    best_distance = result['editDistance']
             
-                
+        ### if acceptable alignment, store read edit proportions for each allele
+        read_mismatched_proportions[read.name] = read_distance_dict
+    
+    ### print results (read, allele, edit distance proportion)
+    for read, stats in read_mismatched_proportions.items():
+        for allele, mismatch in stats.items():
+            print(read, allele, mismatch, sep=args.delimiter)
 
 
 
 ### print useful information to stderr
 print("Max proportion of read that is mismatches/indels: %d" % args.max_mismatch, file=sys.stderr)
-print("Edit distance stats: Min: %d, Median: %d, Max: %d" % (ED_min, ED_mean, ED_max), file=sys.stderr)
+#print("Edit distance stats: Min: %d, Median: %d, Max: %d" % (ED_min, ED_mean, ED_max), file=sys.stderr)
 print("Number of alleles tested: %d" % len(alleles), file=sys.stderr)
 print("Number of quality reads: %d" % len(quality_reads), file=sys.stderr)
 print("Number of low quality reads: %d" % len(bad_reads), file=sys.stderr)
