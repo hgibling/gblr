@@ -49,8 +49,18 @@ reads = pysam.FastxFile(args.reads)
 quality_reads = set()
 flank_reads = set()
 bad_reads = set()
+allele_names = list(allele.keys())
+allele_lengths = dict.fromkeys(allele_names)
 allele_counts = defaultdict(int)
 edit_distances = []
+
+### make sure specified flank length not longer than any allele sequences
+for name, sequence in alleles.items():
+    allele_length_no_end_flank = len(sequence) - args.flank_length
+    if allele_length_no_end_flank <= 0:
+        exit("ERROR: flank-length argument too long for allele sequences provided (failed at allele %s)." % allele_name)
+    else:
+        allele_lengths[name] = allele_length_no_end_flank
 
 ### for generating quick counts
 if args.quick_count:
@@ -66,14 +76,9 @@ if args.quick_count:
             for allele_name, allele_sequence in alleles.items():
                 result = edlib.align(strand_sequence, allele_sequence, mode = "HW", task = "path")
 
-                ### make sure specified flank length not longer than the allele sequence
-                allele_length_no_end_flank = len(allele_sequence) - args.flank_length
-                if allele_length_no_end_flank <= 0:
-                    exit("ERROR: flank-length argument too long for allele sequences provided (failed at allele %s)." % allele_name)
-
                 ### ignore alignments that do not meet the minimum number of bases a read must align to in the variable region of interest
                 # check if alignment starts after the 3' minimum alignment threshold, or ends before the 5' minimum threshold
-                if ((result['locations'][0][0] > (allele_length_no_end_flank - args.alignment_tolerance)) or (result['locations'][0][1] < (args.flank_length + args.alignment_tolerance))):
+                if ((result['locations'][0][0] > (allele_lengths[allele_name] - args.alignment_tolerance)) or (result['locations'][0][1] < (args.flank_length + args.alignment_tolerance))):
                     flank_reads.add(read.name)
                     continue
 
@@ -122,7 +127,28 @@ if args.quick_count:
         print(allele, count, count/len(quality_reads), sep=args.delimiter)
 
 ### for generating full likelihood scores:
-# else:
+else:
+
+    ### align each read against all alleles
+    for read in reads:
+        temp_dict = dict.fromkeys(allele_names)
+
+        ### check alignment to each allele
+        for allele_name, allele_sequence in alleles.items():
+            best_distance = args.max_mismatch * len(read.sequence)
+        
+            ### check alignment for forward and reverse reads
+            for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
+                result = edlib.align(strand_sequence, allele_sequence, mode = "HW", task = "path")
+
+                ### ignore alignments that do not meet the minimum number of bases a read must align to in the variable region of interest
+                # check if alignment starts after the 3' minimum alignment threshold, or ends before the 5' minimum threshold
+                if ((result['locations'][0][0] > (allele_lengths[allele_name] - args.alignment_tolerance)) or (result['locations'][0][1] < (args.flank_length + args.alignment_tolerance))):
+                    flank_reads.add(read.name)
+                    continue
+            
+                
+
 
 
 ### print useful information to stderr
