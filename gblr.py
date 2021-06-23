@@ -119,7 +119,7 @@ if args.quick_count:
 
     ### print results (allele, count, proportion)
     for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
-        print(allele, args.delimiter, count, args.delimiter, count/len(quality_reads))
+        print(allele, count, count/len(quality_reads), sep=args.delimiter)
 
 ### for generating full likelihood scores:
 # else:
