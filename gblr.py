@@ -5,8 +5,9 @@ from collections import defaultdict
 import argparse
 import edlib
 import math
+import numpy as np
 import os
-import pandas
+import pandas as pd
 import pysam
 import sys
 
@@ -128,7 +129,7 @@ if args.quick_count:
 
 ### for generating full likelihood scores:
 else:
-    read_mismatched_proportions = {}
+    mismatched_proportions = {}
 
     ### align each read against all alleles
     for read in reads:
@@ -154,12 +155,15 @@ else:
                     best_distance = result['editDistance']
             
         ### if acceptable alignment, store read edit proportions for each allele
-        read_mismatched_proportions[read.name] = read_distance_dict
+        mismatched_proportions[read.name] = read_distance_dict
+
+    ### get log sums of values          # TODO: deal with null values
+    mismatched_likelihoods = pd.DataFrame.from_dict(mismatched_proportions, orient='index')
+    mismatched_likelihoods = np.log10(mismatched_likelihoods).sum().sort_values(ascending=False)
     
     ### print results (read, allele, edit distance proportion)
-    for read, stats in read_mismatched_proportions.items():
-        for allele, mismatch in stats.items():
-            print(read, allele, mismatch, sep=args.delimiter)
+    for allele, likelihood in mismatched_likelihoods.items():
+        print(allele, likelihood, sep=args.delimiter)
 
 
 
