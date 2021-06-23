@@ -108,6 +108,9 @@ if args.quick_count:
             # iterate through all best alleles and count proportions
             for i, allele in enumerate(best_allele):
                 allele_counts[best_allele[i]] += 1/len(best_allele)
+        
+        else:
+            exit("ERROR: no reads aligned to region of interest")
 
     ### calculate stats for edit distances between the quality reads and the best alleles
     ED_max = max(edit_distances)
