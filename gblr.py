@@ -186,7 +186,6 @@ else:
 
     ### get table of edit distances         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
-    print(allele_edit_distances, file=sys.stderr)
 
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
@@ -198,8 +197,6 @@ else:
         for g in genotype_names:
             split_alleles = g.split('/')
             genotype_edit_distances[g] = ( allele_edit_distances[split_alleles[0]] / 2 ) + ( allele_edit_distances[split_alleles[1]] / 2 )
-
-        print(genotype_edit_distances, file=sys.stderr)
 
         all_scores = genotype_edit_distances.sum().sort_values()
 
