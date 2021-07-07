@@ -9,6 +9,7 @@ import numpy as np
 import os
 import pandas as pd
 import pysam
+import re
 import sys
 
 ### define functions
@@ -190,6 +191,8 @@ else:
 
     ### get table of cigars
     allele_cigars = pd.DataFrame.from_dict(all_cigars, orient='index')
+    ### TODO: split cigars into components and use
+    # re.findall('[0-9]*[A-Z,=]', cigar)
 
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
