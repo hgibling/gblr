@@ -26,6 +26,15 @@ def reverse_complement(sequence):
     reverse_complement = "".join(complement.get(base, 'N') for base in reversed(sequence))
     return reverse_complement
 
+# get all possible genotypes
+def get_genotype_names(allele_names):
+    genotype_names = []
+    for i in allele_names:
+        for j in allele_names:
+            if i <= j:
+                genotype_names.append(i + '/' + j)
+    return genotype_names
+
 ### parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file of allele sequences with flanking sequences')
@@ -33,7 +42,7 @@ parser.add_argument('-r', '--reads', type=str, required=True, help='fasta/q file
 parser.add_argument('-f', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-t', '--alignment-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='maximum proportion of a read that can be mismatched/indels relative to an allele')
-parser.add_argument('-d', '--diploid', action='store_true', help='call diploid genotypes instead of haploid alleles')
+parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype likelihoods instead of haploid (cannot be used with --quick-count)')
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of full likelihood scoring')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for output results')
 args = parser.parse_args()
@@ -41,6 +50,9 @@ args = parser.parse_args()
 ### check arguments
 if args.max_mismatch < 0 or args.max_mismatch > 1:
     exit("ERROR: max-mistmatch argument must be a proportion (between 0 and 1). Check parameters.")
+
+if args.diploid and args.quick_count:
+    exit("ERROR: diploid calling cannot be done with the quick-count methid (haploid only)")
 
 ### get allele and read sequences
 alleles = get_sequences_from_fasta(args.alleles)
@@ -157,15 +169,31 @@ else:
         ### if acceptable alignment, store read edit proportions for each allele
         mismatched_proportions[read.name] = read_distance_dict
 
-    ### get log sums of values          # TODO: deal with null values
-    mismatched_likelihoods = pd.DataFrame.from_dict(mismatched_proportions, orient='index')
-    mismatched_likelihoods = np.log10(mismatched_likelihoods).sum().sort_values(ascending=False)
+    ### get table of likelihoods         # TODO: deal with null values
+    mismatched_allele_likelihoods = pd.DataFrame.from_dict(mismatched_proportions, orient='index')
+
+    ### get genotype likelihoods if doing diploid calling
+    if args.diploid:
+
+        ### get all possible genotypes
+        genotype_names = get_genotype_names(allele_names)
+        mismatched_genotype_likelihoods = pd.DataFrame(index=mismatched_allele_likelihoods.index, columns=genotype_names)
+
+        for g in genotype_names:
+            split_alleles = g.split('/')
+            mismatched_genotype_likelihoods[g] = ( mismatched_allele_likelihoods[split_alleles[0]] / 2 ) + ( mismatched_allele_likelihoods[split_alleles[1]] / 2 )
+        
+        ### get likelihoods
+        mismatched_genotype_likelihoods = mismatched_genotype_likelihoods.replace(0, 1)
+        mismatched_likelihoods = np.log10(mismatched_genotype_likelihoods.replace(0, 0.000001)).sum().sort_values()
     
-    ### print results (read, allele, edit distance proportion)
-    for allele, likelihood in mismatched_likelihoods.items():
-        print(allele, likelihood, sep=args.delimiter)
-
-
+    ### get allele likelihoods if not doing diploid calling
+    else:
+        mismatched_likelihoods = np.log10(mismatched_allele_likelihoods.replace(0, 0.0000001)).sum().sort_values()
+    
+    ### print results (allele or genotype, likelihood-ish score)
+    for name, likelihood in mismatched_likelihoods.items():
+        print(name, likelihood, sep=args.delimiter)
 
 ### print useful information to stderr
 print("Max proportion of read that is mismatches/indels: %d" % args.max_mismatch, file=sys.stderr)
