@@ -176,16 +176,20 @@ else:
                 subset_result = edlib.align(strand_subset, allele_sequence[args.flank_length : -args.flank_length], mode = "HW", task = "path")
 
                 ### check edit distance and store lowest edit distance between forward and reverse read sequences
-                if result['editDistance'] <= best_distance:
-                    read_distance_dict[allele_name] = result['editDistance']
-                    read_cigar_dict[allele_name] = result['cigar']
-                    best_distance = result['editDistance']
+                if subset_result['editDistance'] <= best_distance:
+                    read_distance_dict[allele_name] = subset_result['editDistance']
+                    read_cigar_dict[allele_name] = subset_result['cigar']
+                    best_distance = subset_result['editDistance']
             
         ### if acceptable alignment, store read edit proportions for each allele
         all_edit_distances[read.name] = read_distance_dict
+        all_cigars[read.name] = read_cigar_dict
 
     ### get table of edit distances         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
+
+    ### get table of cigars
+    allele_cigars = pd.DataFrame.from_dict(all_cigars, orient='index')
 
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
