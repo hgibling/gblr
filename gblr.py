@@ -170,7 +170,7 @@ else:
                 ##### subset read to the portion that aligns to the region of interest
                 subset_start_position = args.flank_length - result['locations'][0][0]
                 subset_end_position = args.flank_length - (all_allele_lengths[allele_name] - result['locations'][0][1]) + 1
-                strand_subset = strand_sequence[subset_start_position : -end]
+                strand_subset = strand_sequence[subset_start_position : -subset_end_position]
 
                 ### realign read subset to allele
                 subset_result = edlib.align(strand_subset, allele_sequence[args.flank_length : -args.flank_length], mode = "HW", task = "path")
