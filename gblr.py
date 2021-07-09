@@ -146,12 +146,10 @@ if args.quick_count:
 ### for generating scores:
 else:
     all_edit_distances = {}
-    all_cigars = {}
 
     ### align each read against all alleles
     for read in reads:
         read_distance_dict = dict.fromkeys(allele_names)
-        read_cigar_dict = dict.fromkeys(allele_names)
 
         ### check alignment to each allele
         for allele_name, allele_sequence in alleles.items():
@@ -160,7 +158,6 @@ else:
             ### check alignment for forward and reverse reads
             for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
                 result = edlib.align(strand_sequence, allele_sequence, mode = "HW", task = "path")
-
 
                 ### check that read spans full region of interest and at least args.flank_tolerance into both flank sequences 
                 ### if not, ignore
@@ -179,20 +176,13 @@ else:
                 ### check edit distance and store lowest edit distance between forward and reverse read sequences
                 if subset_result['editDistance'] <= best_distance:
                     read_distance_dict[allele_name] = subset_result['editDistance']
-                    read_cigar_dict[allele_name] = subset_result['cigar']
                     best_distance = subset_result['editDistance']
             
         ### if acceptable alignment, store read edit proportions for each allele
         all_edit_distances[read.name] = read_distance_dict
-        all_cigars[read.name] = read_cigar_dict
 
     ### get table of edit distances         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
-
-    ### get table of cigars
-    allele_cigars = pd.DataFrame.from_dict(all_cigars, orient='index')
-    ### TODO: split cigars into components and use
-    # re.findall('[0-9]*[A-Z,=]', cigar)
 
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
