@@ -37,7 +37,7 @@ def get_genotype_names(allele_names):
     return genotype_names
 
 # figure how much to adjust left and right chops for subsetting reads when they have indels before/after the region of interest
-def indel_offsets(read_sequence, read_cigar, read_length, ref_start, ref_end, region_start, region_end):
+def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     left_chop = region_start - ref_start - 1
     right_chop = ref_end - region_end
     split_cigar = re.findall('[0-9]*[A-Z=]', read_cigar)
@@ -52,7 +52,7 @@ def indel_offsets(read_sequence, read_cigar, read_length, ref_start, ref_end, re
         elif chunk.endswith('D'):
             left_indel -= int(chunk[:chunk.find('D')])
             left_count -= int(chunk[:chunk.find('D')])
-        elif chunck.endswith('I'):
+        elif chunk.endswith('I'):
             left_indel += int(chunk[:chunk.find('I')])
             left_count += int(chunk[:chunk.find('I')])
     left_chop += left_indel
@@ -67,7 +67,7 @@ def indel_offsets(read_sequence, read_cigar, read_length, ref_start, ref_end, re
         elif chunk.endswith('D'):
             right_indel -= int(chunk[:chunk.find('D')])
             right_count -= int(chunk[:chunk.find('D')])
-        elif chunck.endswith('I'):
+        elif chunk.endswith('I'):
             right_indel += int(chunk[:chunk.find('I')])
             right_count += int(chunk[:chunk.find('I')])
     right_chop += right_indel
@@ -212,49 +212,30 @@ else:
             read_info = [read.reference_start, read.reference_end, read.query_length, read.query_sequence]
                 
             ### subset read to just the region of interest
-            start_chop = 
-            end_chop = read.reference_end - region[2] + 1    
-            read_subset = read.query_alignment_sequence[start_chop : -end_chop]
+            chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2]) 
+            read_subset = read.query_alignment_sequence[chop_sites[0] : -chop_sites[1]]
 
             ### check alignment to each allele
             for allele_name, allele_sequence in alleles.items():
                 best_distance = math.inf
             
                 ### check alignment for forward and reverse reads
-                for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
-                    result = edlib.align(strand_sequence, allele_sequence, mode = "HW", task = "path")
-                    #print("allele: %s, strand: %d, start: %d, end: %d" % (allele_name, strand_idx, result['locations'][0][0], result['locations'][0][1]), file=sys.stderr)
-
-                    ### check that read spans full region of interest and at least args.flank_tolerance into both flank sequences 
-                    ### if not, ignore
-                    if result['locations'][0][0] > (args.flank_length - args.flank_tolerance) or result['locations'][0][1] < (all_allele_lengths[allele_name] - args.flank_length + args.flank_tolerance):
-                        flank_reads.add(read.name)
-                        continue
-
-                    ##### subset read to the portion that aligns to the region of interest
-                    subset_start_position = args.flank_length - result['locations'][0][0]
-                    subset_end_position = args.flank_length - (all_allele_lengths[allele_name] - result['locations'][0][1]) + 1
-                    strand_subset = strand_sequence[subset_start_position : -subset_end_position]
-                    #print("read: %f, sub: %f, allele: %f" % (len(strand_sequence), len(strand_subset), len(allele_sequence[args.flank_length : -args.flank_length])), file=sys.stderr)
-
-                    ### realign read subset to allele (subset allele for quicker realignment)
-                    subset_result = edlib.align(strand_subset, allele_sequence[args.flank_length : -args.flank_length], mode = "HW", task = "path")
-                    region_of_interest_reads.add(read.name) 
+                for strand_idx, strand_sequence in enumerate([read_subset, reverse_complement(read_subset)]):
+                    subset_alignment = edlib.align(strand_sequence, allele_sequence[args.flank_length : -args.flank_length], mode = "HW", task = "path")
+                    region_of_interest_reads.add(read.query_name) 
 
                     ### check edit distance and store lowest edit distance between forward and reverse read sequences
-                    if subset_result['editDistance'] <= best_distance:
-                        read_distance_dict[allele_name] = subset_result['editDistance']
-                        best_distance = subset_result['editDistance']
+                    if subset_alignment['editDistance'] <= best_distance:
+                        read_distance_dict[allele_name] = subset_alignment['editDistance']
+                        best_distance = subset_alignment['editDistance']
             
-        ### store read edit distances for each allele
-        all_edit_distances[read.name] = read_distance_dict
+            ### store read edit distances for each allele
+            all_edit_distances[read.query_name] = read_distance_dict
 
     ### get table of edit distances         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
 
     if args.verbose:
-        # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-        #     print(allele_edit_distances, file=sys.stderr)
         allele_edit_distances.to_csv("ERR.tsv", sep="\t")
 
     ### get genotype edit distances if doing diploid calling
