@@ -59,10 +59,9 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     
     # adjust right_chop to account for indels in read after the region of interest
     for chunk in split_cigar[::-1]: 
-        # adjust left_chop to account for indels in read before the region of interest
-        if right_count >= left_chop:
+        if right_count >= right_chop:
             break   # start of the region of interest has been reached
-        if chunk.endswith('[MX=]'):
+        if chunk.endswith(('M', 'X', '=')):
             right_count += int(chunk[:chunk.find('MX=')])
         elif chunk.endswith('D'):
             right_indel -= int(chunk[:chunk.find('D')])
@@ -71,7 +70,7 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
             right_indel += int(chunk[:chunk.find('I')])
             right_count += int(chunk[:chunk.find('I')])
     right_chop += right_indel
-    
+
     # return values for subsetting
     return [left_chop, right_chop]
 
@@ -219,6 +218,8 @@ else:
             ### subset read to just the region of interest
             chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2]) 
             read_subset = read.query_alignment_sequence[chop_sites[0] : -chop_sites[1]]
+            
+
 
             ### check alignment to each allele
             for allele_name, allele_sequence in alleles.items():
@@ -271,24 +272,23 @@ else:
         all_scores = genotype_edit_distances.sum().sort_values()
 
     else:
-
         all_scores = allele_edit_distances.sum().sort_values()
     
     ### print results (allele or genotype name, score)
     for name, score in all_scores.items():
-        print(name, likelihood, sep=args.delimiter)
+        print(name, score, sep=args.delimiter)
 
     ### for each read, print alignments for specified alleles and best allele
     if args.alignments != None:
         for read, dictionary in all_edit_distances.items():
-            print("Read %s: best alelle was %s (ED=%d)" % (read, best_alleles[read], dictionary.get(best_alleles[read])))
-            print("\n".join(all_alignments[read][best_alleles[read]].values()))
-            print("\n")
+            print("Read %s: best alelle was %s (ED=%d)" % (read, best_alleles[read], dictionary.get(best_alleles[read])), file=sys.stderr)
+            print("\n".join(all_alignments[read][best_alleles[read]].values()), file=sys.stderr)
+            print("\n", file=sys.stderr)
             for a in alignment_alleles:
-                print("Compare to alginment to allele %s (ED=%d):" % (a, dictionary[a]))
-                print("\n".join(all_alignments[read][a].values()))
-                print("\n")
-            print("---\n")
+                print("Compare to alginment to allele %s (ED=%d):" % (a, dictionary[a]), file=sys.stderr)
+                print("\n".join(all_alignments[read][a].values()), file=sys.stderr)
+                print("\n", file=sys.stderr)
+            print("---\n", file=sys.stderr)
 
 ### print useful information to stderr
 # print("Max proportion of read that is mismatches/indels: %d" % args.max_mismatch, file=sys.stderr)
