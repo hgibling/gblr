@@ -86,8 +86,8 @@ parser.add_argument('-q', '--quick-count', action='store_true', help='get counts
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
-parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
-parser.add_argument('-A', '--alignments', type=str, help='print alignments of specified alleles (separated by commas; ex: C,D,L18) plus best allele to alignments.txt')
+parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to ED-table.tsv')
+parser.add_argument('-A', '--alignments', type=str, help='print alignments of specified alleles (separated by commas; ex: C,D,L18) plus best allele to stderr')
 args = parser.parse_args()
 
 ### check arguments
@@ -219,8 +219,6 @@ else:
             chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2]) 
             read_subset = read.query_alignment_sequence[chop_sites[0] : -chop_sites[1]]
             
-
-
             ### check alignment to each allele
             for allele_name, allele_sequence in alleles.items():
                 best_distance = math.inf
@@ -236,13 +234,11 @@ else:
                         best_distance = subset_alignment['editDistance']
                         if args.alignments != None:
                             read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
-
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
             if args.alignments != None:
                 all_alignments[read.query_name] = read_alignment_dict
-
 
     ### get table of edit distances         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
@@ -255,7 +251,7 @@ else:
     allele_edit_distances.loc['Sum'] = allele_edit_distances.sum()
 
     if args.verbose:
-        allele_edit_distances.to_csv("ERR.tsv", sep="\t")
+        allele_edit_distances.to_csv("ED-table.tsv", sep="\t")
 
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
@@ -278,7 +274,7 @@ else:
     for name, score in all_scores.items():
         print(name, score, sep=args.delimiter)
 
-    ### for each read, print alignments for specified alleles and best allele
+    ### for each read, print alignments for best allele and specified alleles
     if args.alignments != None:
         for read, dictionary in all_edit_distances.items():
             print("Read %s: best alelle was %s (ED=%d)" % (read, best_alleles[read], dictionary.get(best_alleles[read])), file=sys.stderr)
