@@ -78,7 +78,7 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
 parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file of sequences for alleles or region of interest, including flanking sequences')
 parser.add_argument('-r', '--reads', type=str, required=True, help='bam file of aligned sequencing reads (or fastx if --quick-count is specified)')
-parser.add_argument('-R', '--region', type=str, default="chr5:23526782,23527873", help='position of one region of interest with a chromosome name that matches the bam provided for --reads (ex: chr1:100000-200000)')
+parser.add_argument('-R', '--region', type=str, default="5:23526782,23527873", help='position of one region of interest with a chromosome name that matches the bam provided for --reads (ex: chr1:100000-200000)')
 parser.add_argument('-l', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
