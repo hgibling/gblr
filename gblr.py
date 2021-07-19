@@ -263,7 +263,7 @@ else:
 
         for g in genotype_names:
             split_alleles = g.split('/')
-            genotype_edit_distances[g] = ( allele_edit_distances[split_alleles[0]] / 2 ) + ( allele_edit_distances[split_alleles[1]] / 2 )
+            genotype_edit_distances[g] = allele_edit_distances[[split_alleles[0], split_alleles[1]]].min(axis=1)
 
         all_scores = genotype_edit_distances.sum().sort_values()
 
