@@ -247,18 +247,18 @@ else:
     if args.alignments != None:
         best_alleles = allele_edit_distances.idxmin(axis=1)
 
-    ### get sum of edit distances to print
-    allele_edit_distances.loc['Sum'] = allele_edit_distances.sum()
-
     if args.verbose:
+        ### get sum of edit distances to print
+        allele_edit_distances.loc['Sum'] = allele_edit_distances.sum()
         allele_edit_distances.to_csv("ED-table.tsv", sep="\t")
+        ### remove sum row for further analysis
+        allele_edit_distances = allele_edit_distances[:-1]
 
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
 
         ### get all possible genotypes
         genotype_names = get_genotype_names(allele_names)
-        allele_edit_distances = allele_edit_distances[:-1]
         genotype_edit_distances = pd.DataFrame(index=allele_edit_distances.index, columns=genotype_names)
 
         for g in genotype_names:
