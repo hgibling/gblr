@@ -86,7 +86,7 @@ parser.add_argument('-q', '--quick-count', action='store_true', help='get counts
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
-parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to ED-table.tsv')
+parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
 parser.add_argument('-A', '--alignments', type=str, help='print alignments of specified alleles (separated by commas; ex: C,D,L18) plus best allele to stderr')
 args = parser.parse_args()
 
@@ -250,7 +250,7 @@ else:
     if args.verbose:
         ### get sum of edit distances to print
         allele_edit_distances.loc['Sum'] = allele_edit_distances.sum()
-        allele_edit_distances.to_csv("ED-table.tsv", sep="\t")
+        print(allele_edit_distances.to_string(), file=sys.stderr)
         ### remove sum row for further analysis
         allele_edit_distances = allele_edit_distances[:-1]
 
