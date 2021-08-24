@@ -81,6 +81,7 @@ parser.add_argument('-r', '--reads', type=str, required=True, help='bam file of 
 parser.add_argument('-R', '--region', type=str, default="5:23526782,23527873", help='position of one region of interest with a chromosome name that matches the bam provided for --reads (ex: chr1:100000-200000)')
 parser.add_argument('-l', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
+parser.add_argument('-e', '--error-rate', type=float, default=0.001, help='estimate of the sequencing error rate')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
@@ -263,9 +264,10 @@ else:
 
         for g in genotype_names:
             split_alleles = g.split('/')
-            genotype_edit_distances[g] = allele_edit_distances[[split_alleles[0], split_alleles[1]]].min(axis=1)
+            #genotype_edit_distances[g] = allele_edit_distances[[split_alleles[0], split_alleles[1]]].min(axis=1)
+            genotype_edit_distances[g] = np.logaddexp((allele_edit_distances[split_alleles[0]] * np.log(args.error_rate) - np.log(2)), (allele_edit_distances[split_alleles[1]] * np.log(args.error_rate) - np.log(2)))
 
-        all_scores = genotype_edit_distances.sum().sort_values()
+        all_scores = genotype_edit_distances.sum().sort_values(ascending=False)
 
     else:
         all_scores = allele_edit_distances.sum().sort_values()
