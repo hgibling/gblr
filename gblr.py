@@ -79,7 +79,7 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     return [left_chop, right_chop]
 
 # get multiple sequence alignment
-def run_mafft(allele, allele_reads_list, all_subset_reads):
+def get_MSA(allele, allele_reads_list, all_subset_reads):
     # get read sequences for each allele
     temp_genotype_reads_dict = dict.fromkeys(allele_reads_list, 0)
     for read in temp_genotype_reads_dict.keys():
@@ -99,28 +99,33 @@ def run_mafft(allele, allele_reads_list, all_subset_reads):
     reads_msa = AlignIO.read(StringIO(stdout), "fasta")
     return(reads_msa)
 
-# # get consensus sequence
-# def get_consensus(reads_msa, reference_sequence, threshold):
-#     IUPAC_ambiguous = {'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
+# get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
+def get_consensus(reads_msa, reference_sequence, threshold):
+    IUPAC_ambiguous = {'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
 
-#     for i in range(len(reads_msa)):
-        
+    alignment_length = reads_msa.get_alignment_length()
+    profile = {'A': [0]*alignment_length, 'C': [0]*alignment_length, 'G': [0]*alignment_length, 'T': [0]*alignment_length '-': [0]*alignment_length}
 
-
-
-#     alignments_genotype_dict = {}
-#     for allele, read_name in subset_reads_genotype_dict:
-
-
-#     read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
-
-
-#     read_alignments_dict[read][best_alleles[read]].values()
-
-#     # TODO: get longest subset read, or length of reference allele
-#     # save nicealignments
-#     # compare query_aligned from longest read, or first read, and all target_aligned
-#     # https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences
+    # count nucleotide occurances at each location
+    for record in reads_msa:
+        for i, nuc in enumerate(record.seq.upper()):
+            profile[nuc][i] += 1
+    
+    # determine consensus sequence
+    consensus = ""
+    for i in range(alignment_length):
+        max_count = 0
+        max_nuc = ""
+        for nuc in "ACGT-":
+            if profile[nuc][i] > max_count:
+                max_count = profile[nuc][i]
+                max_nuc = nuc
+            elif profile[nuc][i] == max_count:
+                max_nuc = "".join([max_nuc, nuc])
+        if len(max_nuc) > 1:
+            max_nuc = IUPAC_ambiguous[max_nuc]
+        consensus += max_nuc
+    return(consensus)
 
     
 
