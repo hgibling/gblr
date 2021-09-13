@@ -84,7 +84,7 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     temp_genotype_reads_dict = dict.fromkeys(allele_reads_list, 0)
     for read in temp_genotype_reads_dict.keys():
         temp_genotype_reads_dict[read] = all_subset_reads[read]
-    
+
     # write reads to temporary fasta
     fasta_name = "-".join([allele, "reads-temp.fa"])
     outfile = open(fasta_name, "w")
@@ -96,8 +96,13 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     # run mafft to get multiple sequence alignment
     mafft_command = MafftCommandline(input = fasta_name)
     stdout, stderr = mafft_command()
-    reads_msa = AlignIO.read(StringIO(stdout), "fasta")
-    return(reads_msa)
+
+    with open("aligned.fasta", "w") as handle:
+        handle.write(stdout)
+    reads_MSA = AlignIO.read("aligned.fasta", "fasta")
+
+    #reads_MSA = AlignIO.read(StringIO(stdout), "fasta")
+    return(reads_MSA)
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
 def get_consensus(reads_MSA):
@@ -125,7 +130,7 @@ def get_consensus(reads_MSA):
         if len(max_nuc) > 1:
             max_nuc = IUPAC_ambiguous[max_nuc]
         consensus += max_nuc
-    return(consensus)
+    return(consensus.replace("-", ""))
 
 ### parse arguments
 parser = argparse.ArgumentParser()
