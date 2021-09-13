@@ -128,7 +128,14 @@ def get_consensus(reads_MSA):
             elif profile[nuc][i] == max_count:
                 max_nuc = "".join([max_nuc, nuc])
         if len(max_nuc) > 1:
-            max_nuc = IUPAC_ambiguous[max_nuc]
+            if '-' in max_nuc:
+                max_nuc = max_nuc.replace("-", "")
+                if len(max_nuc) == 1:
+                    max_nuc = max_nuc.lower()
+                else: 
+                    max_nuc = IUPAC_ambiguous[max_nuc].lower()
+            else:
+                max_nuc = IUPAC_ambiguous[max_nuc]
         consensus += max_nuc
     return(consensus.replace("-", ""))
 
