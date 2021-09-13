@@ -1,7 +1,11 @@
 #! /usr/bin/env python
 
 ### import libraries
+from Bio import AlignIO
+from Bio.Align.Applications import MafftCommandline     # requires MAFFT to be installed and in PATH
 from collections import defaultdict
+from io import StringIO
+
 import argparse
 import edlib
 import math
@@ -73,6 +77,53 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
 
     # return values for subsetting
     return [left_chop, right_chop]
+
+# get multiple sequence alignment
+def run_mafft(allele, allele_reads_list, all_subset_reads):
+    # get read sequences for each allele
+    temp_genotype_reads_dict = dict.fromkeys(allele_reads_list, 0)
+    for read in temp_genotype_reads_dict.keys():
+        temp_genotype_reads_dict[read] = all_subset_reads[read]
+    
+    # write reads to temporary fasta
+    fasta_name = "-".join([allele, "reads-temp.fa"])
+    outfile = open(fasta_name, "w")
+    for read, sequence in temp_genotype_reads_dict.items():
+        outfile.write(">" + read + "\n")
+        outfile.write(sequence + "\n")
+    outfile.close
+
+    # run mafft to get multiple sequence alignment
+    mafft_command = MafftCommandline(input = fasta_name)
+    stdout, stderr = mafft_command()
+    reads_msa = AlignIO.read(StringIO(stdout), "fasta")
+    return(reads_msa)
+
+# # get consensus sequence
+# def get_consensus(reads_msa, reference_sequence, threshold):
+#     IUPAC_ambiguous = {'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
+
+#     for i in range(len(reads_msa)):
+        
+
+
+
+#     alignments_genotype_dict = {}
+#     for allele, read_name in subset_reads_genotype_dict:
+
+
+#     read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
+
+
+#     read_alignments_dict[read][best_alleles[read]].values()
+
+#     # TODO: get longest subset read, or length of reference allele
+#     # save nicealignments
+#     # compare query_aligned from longest read, or first read, and all target_aligned
+#     # https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences
+
+    
+
 
 ### parse arguments
 parser = argparse.ArgumentParser()
@@ -200,12 +251,12 @@ if args.quick_count:
 ### for generating scores:
 else:
     all_edit_distances = {}
-    subset_reads = {}
+    all_subset_reads = {}
     region = re.split("[:,-]", args.region)
     region = [region[0], int(region[1]), int(region[2])]
+    all_alignments = {}
     if args.alignments != None:
         alignment_alleles = args.alignments.split(",")
-        all_alignments = {}
 
     ### iterate over reads that overlap with region of interest
     for read in reads.fetch(region[0], region[1], region[2]):
@@ -213,12 +264,12 @@ else:
         ### filter reads to consider only those that touch both flanks
         if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
             read_distance_dict = dict.fromkeys(allele_names)
-            if args.alignments != None:
-                read_alignment_dict = dict.fromkeys(allele_names)
+            read_alignment_dict = dict.fromkeys(allele_names)
                 
             ### subset read to just the region of interest
             chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2]) 
             read_subset = read.query_alignment_sequence[chop_sites[0] : -chop_sites[1]]
+            all_subset_reads[read.query_name] = read_subset
             
             ### check alignment to each allele
             for allele_name, allele_sequence in alleles.items():
@@ -233,13 +284,11 @@ else:
                     if subset_alignment['editDistance'] <= best_distance:
                         read_distance_dict[allele_name] = subset_alignment['editDistance']
                         best_distance = subset_alignment['editDistance']
-                        if args.alignments != None:
-                            read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
+                        read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
-            if args.alignments != None:
-                all_alignments[read.query_name] = read_alignment_dict
+            all_alignments[read.query_name] = read_alignment_dict
 
     ### get table of edit distances         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
@@ -264,10 +313,26 @@ else:
 
         for g in genotype_names:
             split_alleles = g.split('/')
-            #genotype_edit_distances[g] = allele_edit_distances[[split_alleles[0], split_alleles[1]]].min(axis=1)
             genotype_edit_distances[g] = np.logaddexp((allele_edit_distances[split_alleles[0]] * np.log(args.error_rate) - np.log(2)), (allele_edit_distances[split_alleles[1]] * np.log(args.error_rate) - np.log(2)))
 
         all_scores = genotype_edit_distances.sum().sort_values(ascending=False)
+
+        ### from top genotype, find out which read is most likely from which allele
+        top_genotype_split = all_scores.index[0].split('/')
+        reads_best_allele = allele_edit_distances[top_genotype_split].idxmin(axis=1)
+
+        top_genotype_subset_reads = {}
+        for a in top_genotype_split:
+            top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
+
+        ### get consensus sequences of the reads for each allele in the top genotype
+        for allele, reads in top_genotype_subset_reads.items():
+            print("allele %s" % allele, file=sys.stderr)
+            for read in reads:
+                print("read %s" % read, file=sys.stderr)
+                align = edlib.align(all_subset_reads[read], alleles[allele][args.flank_length : -args.flank_length], mode = "NW", task = "path")
+                print(align['cigar'], file=sys.stderr)
+            
 
     else:
         all_scores = allele_edit_distances.sum().sort_values()
