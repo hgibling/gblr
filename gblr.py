@@ -100,14 +100,14 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     return(reads_msa)
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
-def get_consensus(reads_msa, reference_sequence, threshold):
+def get_consensus(reads_MSA):
     IUPAC_ambiguous = {'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
 
-    alignment_length = reads_msa.get_alignment_length()
-    profile = {'A': [0]*alignment_length, 'C': [0]*alignment_length, 'G': [0]*alignment_length, 'T': [0]*alignment_length '-': [0]*alignment_length}
+    alignment_length = reads_MSA.get_alignment_length()
+    profile = {'A': [0]*alignment_length, 'C': [0]*alignment_length, 'G': [0]*alignment_length, 'T': [0]*alignment_length, '-': [0]*alignment_length}
 
     # count nucleotide occurances at each location
-    for record in reads_msa:
+    for record in reads_MSA:
         for i, nuc in enumerate(record.seq.upper()):
             profile[nuc][i] += 1
     
@@ -126,9 +126,6 @@ def get_consensus(reads_msa, reference_sequence, threshold):
             max_nuc = IUPAC_ambiguous[max_nuc]
         consensus += max_nuc
     return(consensus)
-
-    
-
 
 ### parse arguments
 parser = argparse.ArgumentParser()
@@ -331,13 +328,11 @@ else:
             top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
 
         ### get consensus sequences of the reads for each allele in the top genotype
-        for allele, reads in top_genotype_subset_reads.items():
-            print("allele %s" % allele, file=sys.stderr)
-            for read in reads:
-                print("read %s" % read, file=sys.stderr)
-                align = edlib.align(all_subset_reads[read], alleles[allele][args.flank_length : -args.flank_length], mode = "NW", task = "path")
-                print(align['cigar'], file=sys.stderr)
-            
+        for allele in top_genotype_subset_reads.keys():
+            allele_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
+            allele_consensus = get_consensus(allele_MSA)
+            if allele_consensus != alleles[allele][args.flank_length:-args.flank_length]:
+                print("Read consensus sequence for allele %s in top-scoring genotype does not match allele sequence: sample likely a has a novel haplotype" % allele)
 
     else:
         all_scores = allele_edit_distances.sum().sort_values()
