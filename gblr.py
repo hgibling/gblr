@@ -343,8 +343,12 @@ else:
         for allele in top_genotype_subset_reads.keys():
             allele_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             allele_consensus = get_consensus(allele_MSA)
-            if allele_consensus != alleles[allele][args.flank_length:-args.flank_length]:
-                print("Read consensus sequence for allele %s in top-scoring genotype does not match allele sequence: sample likely a has a novel haplotype" % allele)
+            allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
+            if allele_consensus != allele_subsequence:
+                print("Novel", "NA", sep=args.delimiter)
+                print("Read consensus sequence for allele %s in top-scoring genotype does not match allele sequence: sample likely a has a novel haplotype" % allele, file=sys.stderr)
+                print("Read consensus:   %s" % allele_consensus, file=sys.stderr)
+                print("Allele consensus: %s" % allele_subsequence, file=sys.stderr)
 
     else:
         all_scores = allele_edit_distances.sum().sort_values()
