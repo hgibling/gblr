@@ -94,14 +94,14 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     outfile.close
 
     # run mafft to get multiple sequence alignment
-    mafft_command = MafftCommandline(input = fasta_name)
+    mafft_command = MafftCommandline(input = fasta_name, localpair=True, maxiterate = 1000)
     stdout, stderr = mafft_command()
 
-    with open("aligned.fasta", "w") as handle:
-        handle.write(stdout)
-    reads_MSA = AlignIO.read("aligned.fasta", "fasta")
+    # with open("aligned.fasta", "w") as handle:
+    #     handle.write(stdout)
+    # reads_MSA = AlignIO.read("aligned.fasta", "fasta")
 
-    #reads_MSA = AlignIO.read(StringIO(stdout), "fasta")
+    reads_MSA = AlignIO.read(StringIO(stdout), "fasta")
     return(reads_MSA)
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
