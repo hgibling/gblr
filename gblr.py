@@ -2,9 +2,7 @@
 
 ### import libraries
 from Bio import AlignIO
-from Bio.Align.Applications import MafftCommandline     # requires MAFFT to be installed and in PATH
 from collections import defaultdict
-from io import StringIO
 
 import argparse
 import edlib
@@ -14,6 +12,8 @@ import os
 import pandas as pd
 import pysam
 import re
+import shlex
+import subprocess
 import sys
 
 ### define functions
@@ -94,14 +94,12 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     outfile.close
 
     # run mafft to get multiple sequence alignment
-    mafft_command = MafftCommandline(input = fasta_name, localpair=True, maxiterate = 1000)
-    stdout, stderr = mafft_command()
+    mafft_command = "mafft --localpair --maxiterate 1000 --quiet " + fasta_name
+    arguments = shlex.split(mafft_command)
 
-    # with open("aligned.fasta", "w") as handle:
-    #     handle.write(stdout)
-    # reads_MSA = AlignIO.read("aligned.fasta", "fasta")
-
-    reads_MSA = AlignIO.read(StringIO(stdout), "fasta")
+    with open("aligned.fasta", "w+") as outfile:
+        out = subprocess.run(arguments, stdout=outfile)
+    reads_MSA = AlignIO.read("aligned.fasta", "fasta")
     return(reads_MSA)
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
