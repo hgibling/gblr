@@ -340,17 +340,22 @@ else:
             top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
 
         ### get consensus sequences of the reads for each allele in the top genotype
+        novel_counter = 0
         for allele in top_genotype_subset_reads.keys():
             allele_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             allele_consensus = get_consensus(allele_MSA)
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
             if allele_consensus != allele_subsequence:
-                print("Novel", "NA", sep=args.delimiter)
+                novel_counter += 1
                 print("Read consensus sequence for allele %s in top-scoring genotype does not match allele sequence: sample likely a has a novel haplotype" % allele, file=sys.stderr)
-                print("Read consensus:   %s" % allele_consensus, file=sys.stderr)
-                print("Allele consensus: %s" % allele_subsequence, file=sys.stderr)
+                #print("Read consensus:   %s" % allele_consensus, file=sys.stderr)
+                #print("Allele consensus: %s" % allele_subsequence, file=sys.stderr)
+        if novel_counter == 1:
+            print("Heterozygous-Novel", "NA", sep=args.delimiter)
+        elif novel_counter == 2:
+            print("Homozygous-Novel", "NA", sep=args.delimiter)
 
-    else:
+    else:   # haploid calling
         all_scores = allele_edit_distances.sum().sort_values()
     
     ### print results (allele or genotype name, score)
