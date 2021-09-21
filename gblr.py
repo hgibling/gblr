@@ -339,17 +339,27 @@ else:
         reads_best_allele = allele_edit_distances[top_genotype_split].idxmin(axis=1)
 
         top_genotype_subset_reads = {}
-        for a in top_genotype_split:
-            top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
+        # hacky workaround for cases when top genotype is homozygous, in case actual geno is het novel
+        if top_genotype_split[0] == top_genotype_split[1]:
+            top_homozygous_allele = top_genotype_split[0]
+            mean_read_edit_distance = allele_edit_distances[top_homozygous_allele].mean()
+            # separate reads into those with the lowest edit distances and those with the highest
+            top_genotype_subset_reads[top_homozygous_allele] = list(allele_edit_distances[top_homozygous_allele].loc[allele_edit_distances[top_homozygous_allele] < mean_read_edit_distance].index)
+            top_genotype_subset_reads[top_homozygous_allele + ":high"] = list(allele_edit_distances[top_homozygous_allele].loc[allele_edit_distances[top_homozygous_allele] > mean_read_edit_distance].index)
+        else:
+            for a in top_genotype_split:
+                top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
 
         ### get consensus sequences of the reads for each allele in the top genotype
         novel_alleles = []
         known_alleles = []
         for allele in top_genotype_subset_reads.keys():
-            allele_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
-            allele_consensus = get_consensus(allele_MSA)
+            # remove temporary allele name for homozygous top genotype if there
+            allele = allele.replace(":high", "")
+            read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
+            read_consensus = get_consensus(read_MSA)
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
-            if allele_consensus != allele_subsequence:
+            if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
                 print("Read consensus sequence for allele %s in top-scoring genotype does not match allele sequence: sample likely has a novel haplotype" % allele, file=sys.stderr)
                 #print("Read consensus:   %s" % allele_consensus, file=sys.stderr)
@@ -358,8 +368,9 @@ else:
                 known_alleles.append(allele)
         if len(novel_alleles) > 0:
             novel_name = "_".join(["Novel_similar", novel_alleles[0]])
-            print_out = "/".join([novel_name, known_alleles[0]])
-            print(print_out, "1", sep=args.delimiter)
+            if len(novel_alleles) == 1:
+                print_out = "/".join([novel_name, known_alleles[0]])
+                print(print_out, "1", sep=args.delimiter)
             if len(novel_alleles) == 2:
                 novel_name2 = "_".join(["Novel_similar", novel_alleles[1]])
                 print_out2 = "/".join([novel_name, novel_name2])
