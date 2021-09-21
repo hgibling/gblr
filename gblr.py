@@ -156,6 +156,7 @@ parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for 
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
+parser.add_argument('-c', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
 parser.add_argument('-A', '--alignments', type=str, help='print alignments of specified alleles (separated by commas; ex: C,D,L18) plus best allele to stderr')
 args = parser.parse_args()
 
@@ -362,10 +363,13 @@ else:
             if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
                 print("Read consensus sequence for allele %s in top-scoring genotype does not match allele sequence: sample likely has a novel haplotype" % allele, file=sys.stderr)
-                #print("Read consensus:   %s" % allele_consensus, file=sys.stderr)
-                #print("Allele consensus: %s" % allele_subsequence, file=sys.stderr)
+                if args.consensus_alignment:
+                    consensus_alignment = edlib.align(read_consensus, allele_subsequence, mode = "NW", task = "path")
+                    nice_consensus_alignment = edlib.getNiceAlignment(consensus_alignment, read_consensus, allele_subsequence)
+                    print("\n".join(nice_consensus_alignment.values()), file=sys.stderr)
             else: 
                 known_alleles.append(allele)
+
         if len(novel_alleles) > 0:
             novel_name = "_".join(["Novel_similar", novel_alleles[0]])
             if len(novel_alleles) == 1:
