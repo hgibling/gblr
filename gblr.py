@@ -108,8 +108,8 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     return(reads_MSA)
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
-def get_consensus(reads_MSA, threshold=0.33):
-    IUPAC_ambiguous = {'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
+def get_consensus(reads_MSA, threshold = 0.33, ambiguous = IUPAC_ambiguous_to_nucleotides):
+    IUPAC_nucs_to_ambiguous = dict((nuc, amb) for amb, nuc in ambiguous.items())
 
     alignment_length = reads_MSA.get_alignment_length()
     profile = pd.DataFrame({'A': [0]*alignment_length, 'C': [0]*alignment_length, 'G': [0]*alignment_length, 'T': [0]*alignment_length, '-': [0]*alignment_length})
@@ -131,9 +131,9 @@ def get_consensus(reads_MSA, threshold=0.33):
                 if len(max_nuc) == 1:
                     max_nuc = max_nuc.lower()
                 else: 
-                    max_nuc = IUPAC_ambiguous[max_nuc].lower()
+                    max_nuc = IUPAC_nucs_to_ambiguous[max_nuc].lower()
             else:
-                max_nuc = IUPAC_ambiguous[max_nuc]
+                max_nuc = IUPAC_nucs_to_ambiguous[max_nuc]
         consensus += max_nuc
     return(consensus.replace("-", ""))
 
@@ -188,6 +188,10 @@ bad_reads = set()
 allele_names = list(alleles.keys())
 all_allele_lengths = dict.fromkeys(allele_names)
 edit_distances = []
+IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'GT', 'M':'AC', 'B':'CGT', 'D':'AGT', 'H':'ACT', 'V':'ACG', 'N':'ACGT'}
+
+
+{'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
 
 ### make sure specified flank length not longer than any allele sequences
 for name, sequence in alleles.items():
