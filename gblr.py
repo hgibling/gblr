@@ -108,7 +108,7 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     return(reads_MSA)
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
-def get_consensus(reads_MSA, threshold=0.35):
+def get_consensus(reads_MSA, threshold=0.33):
     IUPAC_ambiguous = {'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
 
     alignment_length = reads_MSA.get_alignment_length()
@@ -123,7 +123,7 @@ def get_consensus(reads_MSA, threshold=0.35):
     # determine consensus sequence
     consensus = ""
     for i in range(alignment_length):
-        # get all nucleotides that have a frequency of at least threshold
+        # get all nucleotides that have a frequency of at least defined threshold
         max_nuc = "".join(list(profile[profile[i] > (profile[i].sum()*threshold)].index))
         if len(max_nuc) > 1:
             if '-' in max_nuc:
