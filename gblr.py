@@ -190,9 +190,6 @@ all_allele_lengths = dict.fromkeys(allele_names)
 edit_distances = []
 IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'GT', 'M':'AC', 'B':'CGT', 'D':'AGT', 'H':'ACT', 'V':'ACG', 'N':'ACGT'}
 
-
-{'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
-
 ### make sure specified flank length not longer than any allele sequences
 for name, sequence in alleles.items():
     if len(sequence) <= args.flank_length * 2:
