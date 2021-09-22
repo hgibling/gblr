@@ -108,28 +108,23 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     return(reads_MSA)
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
-def get_consensus(reads_MSA):
+def get_consensus(reads_MSA, threshold=0.35):
     IUPAC_ambiguous = {'AG': 'R', 'CT': 'Y', 'CG': 'S', 'AT': 'W', 'GT': 'K', 'AC': 'M', 'CGT': 'B', 'AGT': 'D', 'ACT': 'H', 'ACG': 'V', 'ACGT': 'N'}
 
     alignment_length = reads_MSA.get_alignment_length()
-    profile = {'A': [0]*alignment_length, 'C': [0]*alignment_length, 'G': [0]*alignment_length, 'T': [0]*alignment_length, '-': [0]*alignment_length}
+    profile = pd.DataFrame({'A': [0]*alignment_length, 'C': [0]*alignment_length, 'G': [0]*alignment_length, 'T': [0]*alignment_length, '-': [0]*alignment_length})
 
     # count nucleotide occurances at each location
     for record in reads_MSA:
         for i, nuc in enumerate(record.seq.upper()):
             profile[nuc][i] += 1
+    profile = profile.transpose()
     
     # determine consensus sequence
     consensus = ""
     for i in range(alignment_length):
-        max_count = 0
-        max_nuc = ""
-        for nuc in "ACGT-":
-            if profile[nuc][i] > max_count:
-                max_count = profile[nuc][i]
-                max_nuc = nuc
-            elif profile[nuc][i] == max_count:
-                max_nuc = "".join([max_nuc, nuc])
+        # get all nucleotides that have a frequency of at least threshold
+        max_nuc = "".join(list(profile[profile[i] > (profile[i].sum()*threshold)].index))
         if len(max_nuc) > 1:
             if '-' in max_nuc:
                 max_nuc = max_nuc.replace("-", "")
