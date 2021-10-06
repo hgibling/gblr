@@ -346,7 +346,6 @@ else:
         ### get consensus sequences of the reads for each allele in the top genotype
         novel_alleles = []
         known_alleles = []
-        possible_duplication = False
         ambiguous_list = list(IUPAC_ambiguous_to_nucleotides.keys())
 
         for allele in top_genotype_subset_reads.keys():
@@ -356,6 +355,7 @@ else:
             # check for novel haplotypes
             if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
+                # if top genotype was homozygous, check if consensus sequence indicates the novel allele is heterozygous or not
                 if len(top_genotype_subset_reads.keys()) == 1:
                     for i in ambiguous_list:
                         if i in read_consensus:
@@ -363,9 +363,10 @@ else:
                             break
                     if "het" not in novel_alleles:
                         novel_alleles.append("hom") 
-            else: 
+            else:
                 known_alleles.append(allele)
 
+        # if there are any novel alleles detected, add them to the top of the likelihood results
         if len(novel_alleles) > 0:
             novel_name = "_".join(["Novel_similar", novel_alleles[0]])
             if len(novel_alleles) == 1:
