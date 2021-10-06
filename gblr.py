@@ -108,6 +108,8 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     return(reads_MSA)
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
+IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'GT', 'M':'AC', 'B':'CGT', 'D':'AGT', 'H':'ACT', 'V':'ACG', 'N':'ACGT'}
+
 def get_consensus(reads_MSA, threshold = 0.33, ambiguous = IUPAC_ambiguous_to_nucleotides):
     IUPAC_nucs_to_ambiguous = dict((nuc, amb) for amb, nuc in ambiguous.items())
 
@@ -141,10 +143,10 @@ def get_consensus(reads_MSA, threshold = 0.33, ambiguous = IUPAC_ambiguous_to_nu
 parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file of sequences for alleles or region of interest, including flanking sequences')
 parser.add_argument('-r', '--reads', type=str, required=True, help='bam file of aligned sequencing reads (or fastx if --quick-count is specified)')
-parser.add_argument('-R', '--region', type=str, default="5:23526782,23527873", help='position of one region of interest with a chromosome name that matches the bam provided for --reads (ex: chr1:100000-200000)')
+parser.add_argument('-R', '--region', type=str, default="5:23526782,23527873", help='position of one region of interest with a chromosome name that matches the bam provided for --reads (ex: 1:100000-200000)')
 parser.add_argument('-l', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
-parser.add_argument('-e', '--error-rate', type=float, default=0.001, help='estimate of the sequencing error rate')
+parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estimate of the sequencing error rate')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
@@ -188,7 +190,6 @@ bad_reads = set()
 allele_names = list(alleles.keys())
 all_allele_lengths = dict.fromkeys(allele_names)
 edit_distances = []
-IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'GT', 'M':'AC', 'B':'CGT', 'D':'AGT', 'H':'ACT', 'V':'ACG', 'N':'ACGT'}
 
 ### make sure specified flank length not longer than any allele sequences
 for name, sequence in alleles.items():
@@ -254,9 +255,9 @@ if args.quick_count:
             exit("ERROR: no reads aligned to region of interest")
 
     ### calculate stats for edit distances between the quality reads and the best alleles
-    ED_max = max(edit_distances)
-    ED_min = min(edit_distances)
-    ED_mean = sum(edit_distances) / len(edit_distances)
+    # ED_max = max(edit_distances)
+    # ED_min = min(edit_distances)
+    # ED_mean = sum(edit_distances) / len(edit_distances)
 
     ### print results (allele, count, proportion)
     for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
@@ -272,6 +273,13 @@ else:
     if args.alignments != None:
         alignment_alleles = args.alignments.split(",")
 
+    ### check chromosome naming convention and update region if needed
+    if ("chr" in region[0]) != ("chr" in reads.references[0]):
+        if "chr" in reads.references[0]:
+            region[0] = "chr" + region[0]
+        else:
+            region[0] = region[0].replace("chr", "")
+    
     ### iterate over reads that overlap with region of interest
     for read in reads.fetch(region[0], region[1], region[2]):
 
@@ -336,33 +344,78 @@ else:
         reads_best_allele = allele_edit_distances[top_genotype_split].idxmin(axis=1)
 
         top_genotype_subset_reads = {}
-        # hacky workaround for cases when top genotype is homozygous, in case actual geno is het novel
-        if top_genotype_split[0] == top_genotype_split[1]:
-            top_homozygous_allele = top_genotype_split[0]
-            mean_read_edit_distance = allele_edit_distances[top_homozygous_allele].mean()
-            # separate reads into those with the lowest edit distances and those with the highest
-            top_genotype_subset_reads[top_homozygous_allele] = list(allele_edit_distances[top_homozygous_allele].loc[allele_edit_distances[top_homozygous_allele] < mean_read_edit_distance].index)
-            top_genotype_subset_reads[top_homozygous_allele + ":high"] = list(allele_edit_distances[top_homozygous_allele].loc[allele_edit_distances[top_homozygous_allele] > mean_read_edit_distance].index)
-        else:
-            for a in top_genotype_split:
-                top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
+        # # hacky workaround for cases when top genotype is homozygous, in case actual geno is het novel
+        # if top_genotype_split[0] == top_genotype_split[1]:
+        #     top_homozygous_allele = top_genotype_split[0]
+        #     mean_read_edit_distance = allele_edit_distances[top_homozygous_allele].mean()
+        #     # separate reads into those with the lowest edit distances and those with the highest
+        #     top_genotype_subset_reads[top_homozygous_allele] = list(allele_edit_distances[top_homozygous_allele].loc[allele_edit_distances[top_homozygous_allele] < mean_read_edit_distance].index)
+        #     top_genotype_subset_reads[top_homozygous_allele + ":high"] = list(allele_edit_distances[top_homozygous_allele].loc[allele_edit_distances[top_homozygous_allele] > mean_read_edit_distance].index)
+        # else:
+        #     for a in top_genotype_split:
+        #         top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
+        
+        for a in top_genotype_split:
+            top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
 
         ### get consensus sequences of the reads for each allele in the top genotype
         novel_alleles = []
         known_alleles = []
+        possible_duplication = False
+        ambiguous_list = list(IUPAC_ambiguous_to_nucleotides.keys())
+
         for allele in top_genotype_subset_reads.keys():
-            # remove temporary allele name for homozygous top genotype if there
-            allele = allele.replace(":high", "")
+            # # remove temporary allele name for homozygous top genotype if there
+            # allele = allele.replace(":high", "")
             read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             read_consensus = get_consensus(read_MSA)
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
+            # check for novel haplotypes
             if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
-                print("Read consensus sequence for allele %s in top-scoring genotype does not match allele sequence: sample likely has a novel haplotype" % allele, file=sys.stderr)
-                if args.consensus_alignment:
-                    consensus_alignment = edlib.align(read_consensus, allele_subsequence, mode = "NW", task = "path")
-                    nice_consensus_alignment = edlib.getNiceAlignment(consensus_alignment, read_consensus, allele_subsequence)
-                    print("\n".join(nice_consensus_alignment.values()), file=sys.stderr)
+                if len(top_genotype_subset_reads.keys()) == 1:
+                    for i in ambiguous_list:
+                        if i in read_consensus:
+                            novel_alleles.append("het")
+                            break
+                    if "het" not in novel_alleles:
+                        novel_alleles.append("hom")
+
+            #     if len(top_genotype_subset_reads.keys()) == 1:
+            #         # since homozygous, check if ambiguous nucleotide in consensus sequence to determine number of novel alleles
+            #         for i in range(len(ambiguous_list)):
+            #             if ambiguous_list[i] in read_consensus:
+            #                 print(i, file=sys.stderr)
+            #                 # check if any of the possible nucleotides match the allele nucelotide
+            #                 if allele_subsequence[i] in IUPAC_ambiguous_to_nucleotides[ambiguous_list[i]]:  
+            #                     print(allele_subsequence[i], IUPAC_ambiguous_to_nucleotides[ambiguous_list[i]], file=sys.stderr)
+            #                     if len(IUPAC_ambiguous_to_nucleotides[ambiguous_list[i]]) == 2:
+            #                         known_alleles.append(allele)
+            #                         print("Read consensus sequence for allele %s in top-scoring genotype suggests both a novel haplotype and a match to allele %s at position %f " % (allele, allele, i), file=sys.stderr)
+            #                     else:
+            #                         # rare chance three nucleotides are present in the reads based on consensus threshold (possible gene duplication if using defualt 33% threshold?)
+            #                         possible_duplication = True
+            #                         known_alleles.append(allele)
+            #                         print("Read consensus sequence for allele %s in top-scoring genotype suggests three possible nucleotides at position %f, one of which matches allele %s (possible gene duplication?)" % (allele, i, allele), file=sys.stderr)                                    
+            #             else: # all novel haplotypes
+            #                 if len(IUPAC_ambiguous_to_nucleotides[ambiguous_list[i]]) == 2:
+            #                     novel_alleles.append(allele)
+            #                     print("Read consensus sequence for allele %s in top-scoring genotype suggests two novel haplotypes at position %f" % (allele, i), file=sys.stderr)
+            #                 else:
+            #                     # rare chance three nucleotides are present in the reads based on consensus threshold (possible gene duplication if using defualt 33% threshold?)
+            #                     possible_duplication = True
+            #                     novel_alleles.append(allele)
+            #                     print("Read consensus sequence for allele %s in top-scoring genotype suggests three possible nucleotides at position %f, none that match allele %s (possible gene duplication?)" % (allele, i, allele), file=sys.stderr)
+                # else: # top-scoring genotype was heterozygous
+                #     if ambiguous_list[i] in read_consensus:
+                #         # rare chance three nucleotides are present in the reads based on ambiguous nucleotide in one of the alleles tested (possible gene duplication?)
+                #         possible_duplication = True
+                #         print("Read consensus sequence for allele %s in top-scoring genotype suggests two possible nucleotides at position %f  (possible gene duplication, considering top-scoring genotype was heterozygous?)" % (allele, i), file=sys.stderr)
+
+                # if args.consensus_alignment:
+                #     consensus_alignment = edlib.align(read_consensus, allele_subsequence, mode = "NW", task = "path")
+                #     nice_consensus_alignment = edlib.getNiceAlignment(consensus_alignment, read_consensus, allele_subsequence)
+            #         print("\n".join(nice_consensus_alignment.values()), file=sys.stderr)
             else: 
                 known_alleles.append(allele)
 
