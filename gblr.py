@@ -284,8 +284,11 @@ else:
             read_alignment_dict = dict.fromkeys(allele_names)
                 
             ### subset read to just the region of interest
-            chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2]) 
-            read_subset = read.query_alignment_sequence[chop_sites[0] : -chop_sites[1]]
+            chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2])
+            try:
+                read_subset = read.query_alignment_sequence[chop_sites[0] : -chop_sites[1]]
+            except TypeError:   # to ignore reads without sequences
+                continue
             all_subset_reads[read.query_name] = read_subset
             
             ### check alignment to each allele
