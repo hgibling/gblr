@@ -86,7 +86,7 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
         temp_genotype_reads_dict[read] = all_subset_reads[read]
 
     # write reads to temporary fasta
-    fasta_name = "-".join([allele, "reads-TEMP.fa"])
+    fasta_name = "-".join([args.reads, allele, "reads-TEMP.fa"])
     outfile = open(fasta_name, "w")
     for read, sequence in temp_genotype_reads_dict.items():
         outfile.write(">" + read + "\n")
@@ -96,7 +96,7 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     # run mafft to get multiple sequence alignment
     mafft_command = "mafft --localpair --maxiterate 1000 --quiet " + fasta_name
     arguments = shlex.split(mafft_command)
-    aligned_name = "-".join([allele, "aligned-TEMP.fa"])
+    aligned_name = "-".join([args.reads, allele, "aligned-TEMP.fa"])
     with open(aligned_name, "w+") as outfile:
         out = subprocess.run(arguments, stdout=outfile)
     reads_MSA = AlignIO.read(aligned_name, "fasta")
