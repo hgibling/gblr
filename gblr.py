@@ -86,7 +86,7 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
         temp_genotype_reads_dict[read] = all_subset_reads[read]
 
     # write reads to temporary fasta
-    fasta_name = "-".join([allele, "reads-TEMP.fa"])
+    fasta_name = "-".join([args.reads, allele, "reads-TEMP.fa"])
     outfile = open(fasta_name, "w")
     for read, sequence in temp_genotype_reads_dict.items():
         outfile.write(">" + read + "\n")
@@ -96,7 +96,7 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     # run mafft to get multiple sequence alignment
     mafft_command = "mafft --localpair --maxiterate 1000 --quiet " + fasta_name
     arguments = shlex.split(mafft_command)
-    aligned_name = "-".join([allele, "aligned-TEMP.fa"])
+    aligned_name = "-".join([args.reads, allele, "aligned-TEMP.fa"])
     with open(aligned_name, "w+") as outfile:
         out = subprocess.run(arguments, stdout=outfile)
     reads_MSA = AlignIO.read(aligned_name, "fasta")
@@ -153,6 +153,7 @@ parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for 
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
+parser.add_argument('-V', '--verboser', action='store_true', help='print consensus sequences to stderr')
 parser.add_argument('-c', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
 parser.add_argument('-A', '--alignments', type=str, help='print alignments of specified alleles (separated by commas; ex: C,D,L18) plus best allele to stderr')
 args = parser.parse_args()
@@ -354,6 +355,9 @@ else:
         for allele in top_genotype_subset_reads.keys():
             read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             read_consensus = get_consensus(read_MSA)
+            if args.verboser:
+                print("\nconsensus for allele %s:\n" % (allele), file=sys.stderr)
+                print(read_consensus, file=sys.stderr)
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
             # check for novel haplotypes
             if read_consensus != allele_subsequence:
