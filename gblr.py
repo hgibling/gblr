@@ -362,7 +362,7 @@ else:
             read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             read_consensus = get_consensus(read_MSA)
             if args.verboser:
-                print(">consensus for allele %s" % (allele), file=consensus_file)
+                print(">consensus sequence for reads that best align to allele %s" % (allele), file=consensus_file)
                 print(read_consensus, file=consensus_file)
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
             # check for novel haplotypes
