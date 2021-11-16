@@ -202,8 +202,6 @@ for name, sequence in alleles.items():
 
 ### set up output file
 results_file = open(args.output_name, "w")
-if args.verboser:
-    consensus_file = open(args.output_name + ".consensus.fa", "w")
 
 ### for generating quick counts
 if args.quick_count:
@@ -366,8 +364,10 @@ else:
             if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
                 if args.verboser:
+                    consensus_file = open(args.output_name + ".consensus.fa", "a")
                     print(">consensus sequence for reads that best align to allele %s" % (allele), file=consensus_file)
                     print(read_consensus, file=consensus_file)
+                    consensus_file.close
                 # if top genotype was homozygous, check if consensus sequence indicates the novel allele is heterozygous or not
                 if len(top_genotype_subset_reads.keys()) == 1:
                     for i in ambiguous_list:
@@ -411,5 +411,3 @@ else:
             print("---\n", file=sys.stderr)
 
 results_file.close
-if args.verboser:
-    consensus_file.close
