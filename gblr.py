@@ -153,9 +153,10 @@ parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for 
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
-parser.add_argument('-V', '--verboser', action='store_true', help='print consensus sequences to stderr')
+parser.add_argument('-V', '--verboser', action='store_true', help='print consensus sequences to output-name.consensus.fa')
 parser.add_argument('-c', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
 parser.add_argument('-A', '--alignments', type=str, help='print alignments of specified alleles (separated by commas; ex: C,D,L18) plus best allele to stderr')
+parser.add_argument('-o', '--output-name', type=str, required=True, help='name of file to save scores/calls')
 args = parser.parse_args()
 
 ### check arguments
@@ -198,6 +199,11 @@ for name, sequence in alleles.items():
         exit("ERROR: flank-length argument too long for allele sequence %s" % name)
     else:
         all_allele_lengths[name] = len(sequence)
+
+### set up output file
+results_file = open(args.output_name, "w")
+if args.verboser:
+    consensus_file = open(args.output_name + ".consensus.fa", "w")
 
 ### for generating quick counts
 if args.quick_count:
@@ -257,7 +263,7 @@ if args.quick_count:
 
     ### print results (allele, count, proportion)
     for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
-        print(allele, count, count/len(quality_reads), sep=args.delimiter)
+        print(allele, count, count/len(quality_reads), sep=args.delimiter, file=results_file)
 
 ### for generating scores:
 else:
@@ -356,8 +362,8 @@ else:
             read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             read_consensus = get_consensus(read_MSA)
             if args.verboser:
-                print("\nconsensus for allele %s:\n" % (allele), file=sys.stderr)
-                print(read_consensus, file=sys.stderr)
+                print(">consensus for allele %s" % (allele), file=consensus_file)
+                print(read_consensus, file=consensus_file)
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
             # check for novel haplotypes
             if read_consensus != allele_subsequence:
@@ -378,11 +384,11 @@ else:
             novel_name = "_".join(["Novel_similar", novel_alleles[0]])
             if len(novel_alleles) == 1:
                 print_out = "/".join([novel_name, known_alleles[0]])
-                print(print_out, "1", sep=args.delimiter)
+                print(print_out, "1", sep=args.delimiter, file=results_file)
             if len(novel_alleles) == 2:
                 novel_name2 = "_".join(["Novel_similar", novel_alleles[1]])
                 print_out2 = "/".join([novel_name, novel_name2])
-                print(print_out2, "1", sep=args.delimiter)
+                print(print_out2, "1", sep=args.delimiter, file=results_file)
                 # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score
 
     else:   # haploid calling
@@ -390,7 +396,7 @@ else:
     
     ### print results (allele or genotype name, score)
     for name, score in all_scores.items():
-        print(name, score, sep=args.delimiter)
+        print(name, score, sep=args.delimiter, file=results_file)
 
     ### for each read, print alignments for best allele and specified alleles
     if args.alignments != None:
@@ -403,3 +409,7 @@ else:
                 print("\n".join(all_alignments[read][a].values()), file=sys.stderr)
                 print("\n", file=sys.stderr)
             print("---\n", file=sys.stderr)
+
+results_file.close
+if args.verboser:
+    consensus_file.close
