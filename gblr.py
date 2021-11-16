@@ -361,13 +361,13 @@ else:
         for allele in top_genotype_subset_reads.keys():
             read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             read_consensus = get_consensus(read_MSA)
-            if args.verboser:
-                print(">consensus sequence for reads that best align to allele %s" % (allele), file=consensus_file)
-                print(read_consensus, file=consensus_file)
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
             # check for novel haplotypes
             if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
+                if args.verboser:
+                    print(">consensus sequence for reads that best align to allele %s" % (allele), file=consensus_file)
+                    print(read_consensus, file=consensus_file)
                 # if top genotype was homozygous, check if consensus sequence indicates the novel allele is heterozygous or not
                 if len(top_genotype_subset_reads.keys()) == 1:
                     for i in ambiguous_list:
