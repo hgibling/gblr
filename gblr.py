@@ -111,7 +111,7 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
 IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'GT', 'M':'AC', 'B':'CGT', 'D':'AGT', 'H':'ACT', 'V':'ACG', 'N':'ACGT'}
 
 # get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
-def get_consensus(reads_MSA, threshold = 0.33, ambiguous = IUPAC_ambiguous_to_nucleotides):
+def get_consensus(reads_MSA, threshold = 0.35, ambiguous = IUPAC_ambiguous_to_nucleotides):
     IUPAC_nucs_to_ambiguous = dict((nuc, amb) for amb, nuc in ambiguous.items())
 
     alignment_length = reads_MSA.get_alignment_length()
