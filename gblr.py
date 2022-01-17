@@ -378,23 +378,27 @@ else:
                 # if top genotype was homozygous, check if consensus sequence indicates the novel allele is heterozygous or not
                 if len(top_genotype_subset_reads.keys()) == 1:
                     if any(nuc in read_consensus for nuc in IUPAC_ambiguous_to_nucleotides):
+                        novel_alleles.append("ambiguous")
+                    else:
+                        novel_alleles.append("same")
+                        ### TODO: get more specific about ambiguous consensus sequences
                         # check for ambiguous nucleotides representing 3+ bases
-                        if any(nuc in read_consensus for nuc in IUPAC_multiambiguous_to_nucleotides):
-                            novel_alleles.append("multi") # 3+ allele sequences, so at least 2 do not match allele sequence: het
-                        else:
-                            novel_alleles.append("bi") # either two different novel alleles both similar to parent allele, or one novel and one known: TODO: differentiate these
-                            # TODO
-                            # biambiguous: need to generate all possible consensus sequences
-                            # read_consensus_1 = ""
-                            # read_consensus_2 = ""
-                            # for nuc in read_consensus:
-                            #     if nuc in IUPAC_ambiguous_to_nucleotides:
-                            #         read_consensus_1 += IUPAC_ambiguous_to_nucleotides[nuc][0]
-                            #         read_consensus_2 += IUPAC_ambiguous_to_nucleotides[nuc][1]
-                            #     else:
-                            #         read_consensus_1 += nuc
-                            #         read_consensus_2 += nuc
-                            # compare each unambiguous-consensus sequence to the best allele               
+                        # if any(nuc in read_consensus for nuc in IUPAC_multiambiguous_to_nucleotides):
+                        #     novel_alleles.append("multi") # 3+ allele sequences, so at least 2 do not match allele sequence: het
+                        # else:
+                        #     novel_alleles.append("bi") # either two different novel alleles both similar to parent allele, or one novel and one known: TODO: differentiate these
+                        #     # TODO
+                        #     # biambiguous: need to generate all possible consensus sequences
+                        #     # read_consensus_1 = ""
+                        #     # read_consensus_2 = ""
+                        #     # for nuc in read_consensus:
+                        #     #     if nuc in IUPAC_ambiguous_to_nucleotides:
+                        #     #         read_consensus_1 += IUPAC_ambiguous_to_nucleotides[nuc][0]
+                        #     #         read_consensus_2 += IUPAC_ambiguous_to_nucleotides[nuc][1]
+                        #     #     else:
+                        #     #         read_consensus_1 += nuc
+                        #     #         read_consensus_2 += nuc
+                        #     # compare each unambiguous-consensus sequence to the best allele               
             else:
                 known_alleles.append(allele)
 
@@ -402,19 +406,26 @@ else:
         if len(novel_alleles) > 0:
             novel_name = "_".join(["Novel_Similar", novel_alleles[0]])
             if len(novel_alleles) == 1:
-                print_out = "/".join([novel_name, known_alleles[0]])
-                print(print_out, "1", sep=args.delimiter, file=results_file)
+                print_out_one = "/".join([novel_name, known_alleles[0]])
+                print(print_out_one, "1", sep=args.delimiter, file=results_file)
             elif len(novel_alleles) == 2:
-                if "multi" in novel_alleles:
-                    print_out_multi = "/".join([novel_name, "_".join(["Different", novel_name])])
-                    print(print_out_multi, "1", sep=args.delimiter, file=results_file)
-                elif "bi" in novel_alleles:
-                    print_out_bi = "/".join([novel_name, "_".join([novel_alleles[0], "or", novel_name])])
-                    print(print_out_bi, "1", sep=args.delimiter, file=results_file)
+                if "ambiguous" in novel_alleles:
+                    print_out_ambiguous = "/".join([novel_name, "_".join([novel_alleles[0], "or_Different", novel_name])])
+                    print(print_out_ambiguous, "1", sep=args.delimiter, file=results_file)
+                elif "same" in novel_alleles:
+                    print_out_same = "/".join([novel_name, novel_name])
+                    print(print_out_same, "1", sep=args.delimiter, file=results_file)
+                ### TODO: get more specific about ambiguous consensus sequences
+                # if "multi" in novel_alleles:
+                #     print_out_multi = "/".join([novel_name, "_".join(["Different", novel_name])])
+                #     print(print_out_multi, "1", sep=args.delimiter, file=results_file)
+                # elif "bi" in novel_alleles:
+                #     print_out_bi = "/".join([novel_name, "_".join([novel_alleles[0], "or", novel_name])])
+                #     print(print_out_bi, "1", sep=args.delimiter, file=results_file)
                 else:
                     novel_name2 = "_".join(["Novel_Similar", novel_alleles[1]])
-                    print_out2 = "/".join([novel_name, novel_name2])
-                    print(print_out2, "1", sep=args.delimiter, file=results_file)
+                    print_out_two = "/".join([novel_name, novel_name2])
+                    print(print_out_two, "1", sep=args.delimiter, file=results_file)
             # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score
 
     else:   # haploid calling
