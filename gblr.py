@@ -153,6 +153,7 @@ parser.add_argument('-q', '--quick-count', action='store_true', help='get counts
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
+parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
 parser.add_argument('-V', '--verboser', action='store_true', help='print consensus sequences to output-name.consensus.fa')
 parser.add_argument('-c', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
@@ -193,6 +194,7 @@ bad_reads = set()
 allele_names = list(alleles.keys())
 all_allele_lengths = dict.fromkeys(allele_names)
 edit_distances = []
+N_geno = 0
 
 ### make sure specified flank length not longer than any allele sequences
 for name, sequence in alleles.items():
@@ -263,6 +265,9 @@ if args.quick_count:
     ### print results (allele, count, proportion)
     for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
         print(allele, count, count/len(quality_reads), sep=args.delimiter, file=results_file)
+        N_geno += 1
+        if (args.print_top_N_genos > 0) & (N_geno == args.print_top_N_genos):
+            break
 
 ### for generating scores:
 else:
@@ -302,6 +307,7 @@ else:
                 best_distance = math.inf
             
                 ### check alignment for forward and reverse reads
+                ### TODO: remove, since bams only give sequences in forward orientation
                 for strand_idx, strand_sequence in enumerate([read_subset, reverse_complement(read_subset)]):
                     subset_alignment = edlib.align(strand_sequence, allele_sequence[args.flank_length : -args.flank_length], mode = "NW", task = "path")
                     region_of_interest_reads.add(read.query_name) 
@@ -417,6 +423,9 @@ else:
     ### print results (allele or genotype name, score)
     for name, score in all_scores.items():
         print(name, score, sep=args.delimiter, file=results_file)
+        N_geno += 1
+        if (args.print_top_N_genos > 0) & (N_geno == args.print_top_N_genos):
+            break
 
     ### for each read, print alignments for best allele and specified alleles
     if args.alignments != None:
