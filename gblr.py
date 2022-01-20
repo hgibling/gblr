@@ -316,16 +316,18 @@ else:
                     if subset_alignment['editDistance'] <= best_distance:
                         read_distance_dict[allele_name] = subset_alignment['editDistance']
                         best_distance = subset_alignment['editDistance']
-                        read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
+#                        read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
-            all_alignments[read.query_name] = read_alignment_dict
+#            all_alignments[read.query_name] = read_alignment_dict
 
-    ### get table of edit distances         # TODO: deal with null values
+    ### get table of edit distances
+    # dataframe[reads,alleles: edit distance]         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
 
     ### for each read, get allele with best alignment
+    # series[reads:allele with lowest edit distance]
     if args.alignments != None:
         best_alleles = allele_edit_distances.idxmin(axis=1)
 
@@ -343,14 +345,19 @@ else:
         genotype_names = get_genotype_names(allele_names)
         genotype_edit_distances = pd.DataFrame(index=allele_edit_distances.index, columns=genotype_names)
 
+        ### get genotype likelihoods
+        # dataframe[reads,genos: likelihoods]
         for g in genotype_names:
             split_alleles = g.split('/')
             genotype_edit_distances[g] = np.logaddexp((allele_edit_distances[split_alleles[0]] * np.log(args.error_rate) - np.log(2)), (allele_edit_distances[split_alleles[1]] * np.log(args.error_rate) - np.log(2)))
 
+        ### get overall likelihood for each genotype
+        # series[genos: likelihood]
         all_scores = genotype_edit_distances.sum().sort_values(ascending=False)
 
         ### from top genotype, find out which read is most likely from which allele
         top_genotype_split = all_scores.index[0].split('/')
+        # series[reads: allele with lowest edit distance]
         reads_best_allele = allele_edit_distances[top_genotype_split].idxmin(axis=1)
 
         top_genotype_subset_reads = {}
