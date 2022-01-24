@@ -157,7 +157,6 @@ parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='prin
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
 parser.add_argument('-V', '--verboser', action='store_true', help='print consensus sequences to output-name.consensus.fa')
 parser.add_argument('-c', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
-parser.add_argument('-A', '--alignments', type=str, help='print alignments of specified alleles (separated by commas; ex: C,D,L18) plus best allele to stderr')
 parser.add_argument('-o', '--output-name', type=str, required=True, help='name of file to save scores/calls')
 args = parser.parse_args()
 
@@ -292,7 +291,6 @@ else:
         ### filter reads to consider only those that touch both flanks
         if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
             read_distance_dict = dict.fromkeys(allele_names)
-            read_alignment_dict = dict.fromkeys(allele_names)
                 
             ### subset read to just the region of interest
             chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2])
@@ -304,23 +302,12 @@ else:
             
             ### check alignment to each allele
             for allele_name, allele_sequence in alleles.items():
-                best_distance = math.inf
-            
-                ### check alignment for forward and reverse reads
-                ### TODO: remove, since bams only give sequences in forward orientation
-                for strand_idx, strand_sequence in enumerate([read_subset, reverse_complement(read_subset)]):
-                    subset_alignment = edlib.align(strand_sequence, allele_sequence[args.flank_length : -args.flank_length], mode = "NW", task = "path")
-                    region_of_interest_reads.add(read.query_name) 
-
-                    ### check edit distance and store lowest edit distance between forward and reverse read sequences
-                    if subset_alignment['editDistance'] <= best_distance:
-                        read_distance_dict[allele_name] = subset_alignment['editDistance']
-                        best_distance = subset_alignment['editDistance']
-#                        read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
+                subset_alignment = edlib.align(read_subset, allele_sequence[args.flank_length : -args.flank_length], mode = "NW", task = "path")
+                region_of_interest_reads.add(read.query_name)
+                read_distance_dict[allele_name] = subset_alignment['editDistance']
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
-#            all_alignments[read.query_name] = read_alignment_dict
 
     ### get table of edit distances
     # dataframe[reads,alleles: edit distance]         # TODO: deal with null values
@@ -433,7 +420,7 @@ else:
                     novel_name2 = "_".join(["Novel_Similar", novel_alleles[1]])
                     print_out_two = "/".join([novel_name, novel_name2])
                     print(print_out_two, "1", sep=args.delimiter, file=results_file)
-            # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score
+            # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is NOT a likelihood score
 
     else:   # haploid calling
         all_scores = allele_edit_distances.sum().sort_values()
@@ -444,17 +431,5 @@ else:
         N_geno += 1
         if (args.print_top_N_genos > 0) & (N_geno == args.print_top_N_genos):
             break
-
-    ### for each read, print alignments for best allele and specified alleles
-    if args.alignments != None:
-        for read, dictionary in all_edit_distances.items():
-            print("Read %s: best alelle was %s (ED=%d)" % (read, best_alleles[read], dictionary.get(best_alleles[read])), file=sys.stderr)
-            print("\n".join(all_alignments[read][best_alleles[read]].values()), file=sys.stderr)
-            print("\n", file=sys.stderr)
-            for a in alignment_alleles:
-                print("Compare to alginment to allele %s (ED=%d):" % (a, dictionary[a]), file=sys.stderr)
-                print("\n".join(all_alignments[read][a].values()), file=sys.stderr)
-                print("\n", file=sys.stderr)
-            print("---\n", file=sys.stderr)
 
 results_file.close
