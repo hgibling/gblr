@@ -144,19 +144,19 @@ def get_consensus(reads_MSA, threshold = 0.35, ambiguous = IUPAC_ambiguous_to_nu
 parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file of sequences for alleles or region of interest, including flanking sequences')
 parser.add_argument('-r', '--reads', type=str, required=True, help='bam file of aligned sequencing reads (or fastx if --quick-count is specified)')
-parser.add_argument('-R', '--region', type=str, default="5:23526782,23527873", help='position of one region of interest with a chromosome name that matches the bam provided for --reads (ex: 1:100000-200000)')
+parser.add_argument('-R', '--region', type=str, default="5:23526782,23527873", help='position of the region of interest (ex: chr1:100000-200000)')
 parser.add_argument('-l', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
 parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estimate of the sequencing error rate')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
+parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
+parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
+parser.add_argument('-c', '--consensus_sequence', action='store_true', help='print consensus sequences to output-name.consensus.fa')
+parser.add_argument('-C', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
-parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
-parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
-parser.add_argument('-V', '--verboser', action='store_true', help='print consensus sequences to output-name.consensus.fa')
-parser.add_argument('-c', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
 parser.add_argument('-o', '--output-name', type=str, required=True, help='name of file to save scores/calls')
 args = parser.parse_args()
 
@@ -364,7 +364,7 @@ else:
             # check for novel haplotypes
             if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
-                if args.verboser:
+                if args.consensus_sequence:
                     consensus_file = open(args.output_name + ".consensus.fa", "a")
                     print(">consensus sequence for reads that best align to allele %s" % (allele), file=consensus_file)
                     print(read_consensus, file=consensus_file)
