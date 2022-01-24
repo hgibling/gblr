@@ -152,7 +152,7 @@ parser.add_argument('-d', '--diploid', action='store_true', help='get diploid ge
 parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
 parser.add_argument('-c', '--consensus_sequence', action='store_true', help='print consensus sequences to output-name.consensus.fa')
-parser.add_argument('-C', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
+parser.add_argument('-C', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype to stderr')
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
@@ -186,10 +186,7 @@ else:
         exit("ERROR: issue with the reads file. Is it a proper bam file?")
 
 ### define variables
-quality_reads = set()
-flank_reads = set()
 region_of_interest_reads = set()
-bad_reads = set()
 allele_names = list(alleles.keys())
 all_allele_lengths = dict.fromkeys(allele_names)
 edit_distances = []
@@ -207,6 +204,9 @@ results_file = open(args.output_name, "w")
 
 ### for generating quick counts
 if args.quick_count:
+    quality_reads = set()
+    flank_reads = set()
+    bad_reads = set()
     allele_counts = defaultdict(int)
 
     ### align each read against all alleles
@@ -275,8 +275,6 @@ else:
     region = re.split("[:,-]", args.region)
     region = [region[0], int(region[1]), int(region[2])]
     all_alignments = {}
-    if args.alignments != None:
-        alignment_alleles = args.alignments.split(",")
 
     ### check chromosome naming convention and update region if needed
     if ("chr" in region[0]) != ("chr" in reads.references[0]):
@@ -308,15 +306,13 @@ else:
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
+    
+    ### print number of reads used for analysis
+    print("Number of reads that fully span region of interest: %d" % (len(region_of_interest_reads)), file=sys.stderr)
 
     ### get table of edit distances
     # dataframe[reads,alleles: edit distance]         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
-
-    ### for each read, get allele with best alignment
-    # series[reads:allele with lowest edit distance]
-    if args.alignments != None:
-        best_alleles = allele_edit_distances.idxmin(axis=1)
 
     if args.verbose:
         ### get sum of edit distances to print
