@@ -361,14 +361,21 @@ else:
             if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
                 if args.consensus_sequence:
+                    # print consensus sequence fasta
                     consensus_file = open(args.output_name + ".consensus.fa", "a")
                     print(">consensus sequence for reads that best align to allele %s" % (allele), file=consensus_file)
                     print(read_consensus, file=consensus_file)
                     consensus_file.close
-                # if top genotype was homozygous, check if consensus sequence indicates the novel allele is heterozygous or not
+                # if top genotype is homozygous, check if consensus sequence indicates the novel allele is heterozygous or not
                 if len(top_genotype_subset_reads.keys()) == 1:
                     if any(nuc in read_consensus for nuc in IUPAC_ambiguous_to_nucleotides):
                         novel_alleles.append("ambiguous")
+                        just_ambiguous_nucs = read_consensus.translate({ord(i): None for i in 'ACGT'})
+                        if (len(just_ambiguous_nucs) == 1) & (just_ambiguous_nucs in 'RYSWKM'):
+                            # for simple ambiguous cases, delineate the two possible sequences
+                            read_consensus_first = read_consensus.replace(IUPAC_ambiguous_to_nucleotides[just_ambiguous_nucs][0])
+                            read_consensus_second = read_consensus.replace(IUPAC_ambiguous_to_nucleotides[just_ambiguous_nucs][1])
+
                     else:
                         novel_alleles.append("same")
                         ### TODO: get more specific about ambiguous consensus sequences
