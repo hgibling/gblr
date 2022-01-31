@@ -94,7 +94,7 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
     outfile.close
 
     # run mafft to get multiple sequence alignment
-    mafft_command = "mafft --localpair --maxiterate 1000 --quiet " + fasta_name
+    mafft_command = "mafft --globalpair --maxiterate 1000 --quiet " + fasta_name
     arguments = shlex.split(mafft_command)
     aligned_name = "-".join([args.reads, allele, "aligned-TEMP.fa"])
     with open(aligned_name, "w+") as outfile:
