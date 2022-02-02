@@ -10,6 +10,7 @@ import math
 import numpy as np
 import os
 import pandas as pd
+import pyabpoa as pa
 import pysam
 import re
 import shlex
@@ -107,6 +108,21 @@ def get_MSA(allele, allele_reads_list, all_subset_reads):
 
     return(reads_MSA)
 
+# get MSA with ABPOA
+def get_POA_MSA(allele, allele_reads_list, all_subset_reads):
+    # define aligner parameters
+    aligner = pa.msa_aligner()
+    # get reads of interest
+    reads = [all_subset_reads[key] for key in allele_reads_list]
+    # align all reads
+    reads_MSA = aligner.msa(reads, out_cons=True, out_msa=True)
+    # return list of seqs in MSA format
+    #print(allele_reads_list)
+    #print(reads_MSA.msa_seq)
+    print(allele)
+    print(reads_MSA.cons_seq)
+    return(reads_MSA.msa_seq)
+    
 # all IUPAC ambiguous nucleotides
 IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'GT', 'M':'AC', 'B':'CGT', 'D':'AGT', 'H':'ACT', 'V':'ACG', 'N':'ACGT'}
 
@@ -114,12 +130,16 @@ IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'G
 def get_consensus(reads_MSA, threshold = 0.35, ambiguous = IUPAC_ambiguous_to_nucleotides):
     IUPAC_nucs_to_ambiguous = dict((nuc, amb) for amb, nuc in ambiguous.items())
 
-    alignment_length = reads_MSA.get_alignment_length()
+    # alignment_length = reads_MSA.get_alignment_length()
+    alignment_length = len(reads_MSA[1])
     profile = pd.DataFrame({'A': [0]*alignment_length, 'C': [0]*alignment_length, 'G': [0]*alignment_length, 'T': [0]*alignment_length, '-': [0]*alignment_length})
 
     # count nucleotide occurances at each location
-    for record in reads_MSA:
-        for i, nuc in enumerate(record.seq.upper()):
+    # for record in reads_MSA:
+    #     for i, nuc in enumerate(record.seq.upper()):
+    #         profile[nuc][i] += 1
+    for seq in reads_MSA:
+        for i, nuc in enumerate(seq):
             profile[nuc][i] += 1
     profile = profile.transpose()
     
@@ -132,6 +152,7 @@ def get_consensus(reads_MSA, threshold = 0.35, ambiguous = IUPAC_ambiguous_to_nu
             if '-' in max_nuc:
                 max_nuc = max_nuc.replace("-", "")
                 if len(max_nuc) == 1:
+                    # use lowercase letters to notate positions where a gap occurs ~as frequently as the letter
                     max_nuc = max_nuc.lower()
                 else: 
                     max_nuc = IUPAC_nucs_to_ambiguous[max_nuc].lower()
@@ -364,7 +385,8 @@ else:
         IUPAC_multiambiguous_to_nucleotides = {key: value for key, value in IUPAC_ambiguous_to_nucleotides.items() if len(value) > 2}
 
         for allele in top_genotype_subset_reads.keys():
-            read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
+            # read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
+            read_MSA = get_POA_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             read_consensus = get_consensus(read_MSA)
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
             # check for novel haplotypes
