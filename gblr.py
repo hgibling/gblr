@@ -79,6 +79,33 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     # return values for subsetting
     return [left_chop, right_chop]
 
+# get positions of indels for filtering
+def get_deletion_positions(read, region):
+    split_cigar = [x for x in re.findall('[0-9]*[A-Z=]', read.cigarstring) if not 'S' in x]
+    reference_pos = read.reference_start + 1
+    deletion_positions = []
+
+    # parse if cigar has deletions
+    if any(chunk.endswith('D') for chunk in split_cigar):
+        for chunk in split_cigar:
+            # advance reference_pos for each match and deletion (insertions ignored as they are not in reference)
+            if chunk.endswith(('M', 'X', '=')):
+                print("%s match at %d" % (read.query_name, reference_pos))
+                reference_pos += int(chunk[:chunk.find('MX=')])
+            elif chunk.endswith('D'):
+                # only consider deletions > 10bp
+                if int(chunk[:chunk.find('D')]) > 10:
+                    deletion_positions.append(":".join([str(reference_pos), str(reference_pos + int(chunk[:chunk.find('D')]) - 1)]))
+                    print("big del!")
+                print("%s del at %d" % (read.query_name, reference_pos))
+                reference_pos += int(chunk[:chunk.find('D')])
+        if len(deletion_positions) == 0:
+            deletion_positions.append('None')
+    else:
+        deletion_positions = ['None']
+    return(deletion_positions)
+
+
 # get multiple sequence alignment
 def get_MSA(allele, allele_reads_list, all_subset_reads):
     # get read sequences for each allele
@@ -297,6 +324,7 @@ else:
     region = re.split("[:,-]", args.region)
     region = [region[0], int(region[1]), int(region[2])]
     all_alignments = {}
+    all_deletion_positions_dict = {'None': []}
     if args.alignments != None:
         alignment_alleles = args.alignments.split(",")
 
@@ -314,6 +342,14 @@ else:
         if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
             read_distance_dict = dict.fromkeys(allele_names)
             read_alignment_dict = dict.fromkeys(allele_names)
+
+            ### collect positions of deletions
+            read_deletions = get_deletion_positions(read, region)
+            for pos in read_deletions:
+                if pos not in all_deletion_positions_dict:
+                    all_deletion_positions_dict[pos] = [read.query_name]
+                else:
+                    all_deletion_positions_dict[pos].append(read.query_name)
                 
             ### subset read to just the region of interest
             chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2])
@@ -356,6 +392,10 @@ else:
         print(allele_edit_distances.to_string(), file=sys.stderr)
         ### remove sum row for further analysis
         allele_edit_distances = allele_edit_distances[:-1]
+
+    ### remove reads with unique deletion positions (likely PCR artefact)
+    
+    
 
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
