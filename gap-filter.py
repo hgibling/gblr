@@ -103,6 +103,7 @@ for read in keep_reads:
     file.write("%s\n" % read)
 file.close()
 
+# print read stats
 if args.verbose:
     print("Total number of reads: %d" % (all_reads_length), file=sys.stderr)
-    print("Number of reads kept: %d" % (len(keep_reads)))
+    print("Number of reads kept: %d" % (len(keep_reads)), file=sys.stderr)
