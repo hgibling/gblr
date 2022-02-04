@@ -37,7 +37,7 @@ def get_deletion_positions(read, region, gap_tolerance=args.gap_tolerance):
 ### parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-b', '--bam', type=str, required=True, help='bam file of aligned sequencing reads')
-parser.add_argument('-r', '--region', type=str, default="chr5:23516673-23537764", help='position of one region of interest (ex: chr1:100000-200000)')
+parser.add_argument('-r', '--region', type=str, default="chr5:23526673,23527764", help='position of one region of interest (ex: chr1:100000-200000)')
 parser.add_argument('-g', '--gap-tolerance', type=int, default=20, help='ignore gaps this size or smaller')
 parser.add_argument('-v', '--verbose', action='store_true', help='print stats about reads to stderr')
 parser.add_argument('-o', '--output-name', type=str, required=True, help='name of file to filtered bam')
