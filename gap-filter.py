@@ -19,14 +19,11 @@ def get_deletion_positions(read, region, gap_tolerance=args.gap_tolerance):
         for chunk in split_cigar:
             # advance reference_pos for each match and deletion (insertions ignored as they are not in reference)
             if chunk.endswith(('M', 'X', '=')):
-                print("%s match at %d" % (read.query_name, reference_pos))
                 reference_pos += int(chunk[:chunk.find('MX=')])
             elif chunk.endswith('D'):
                 # only consider deletions > 10bp
                 if int(chunk[:chunk.find('D')]) > gap_tolerance:
                     deletion_positions.append(":".join([str(reference_pos), str(reference_pos + int(chunk[:chunk.find('D')]) - 1)]))
-                    print("big del!")
-                print("%s del at %d" % (read.query_name, reference_pos))
                 reference_pos += int(chunk[:chunk.find('D')])
         if len(deletion_positions) == 0:
             deletion_positions.append('None')
