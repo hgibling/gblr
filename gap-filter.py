@@ -9,7 +9,7 @@ import sys
 
 ### define functions
 # get positions of deletions indels
-def get_deletion_positions(read, region, gap_tolerance=args.gap_tolerance):
+def get_deletion_positions(read, region, gap_tolerance):
     split_cigar = [x for x in re.findall('[0-9]*[A-Z=]', read.cigarstring) if not 'S' in x]
     reference_pos = read.reference_start + 1
     deletion_positions = []
@@ -35,6 +35,7 @@ def get_deletion_positions(read, region, gap_tolerance=args.gap_tolerance):
 parser = argparse.ArgumentParser()
 parser.add_argument('-b', '--bam', type=str, required=True, help='bam file of aligned sequencing reads')
 parser.add_argument('-r', '--region', type=str, default='chr5:23526673,23527764', help='position of one region of interest (ex: chr1:100000-200000)')
+parser.add_argument('-f', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions outside the region of interest')
 parser.add_argument('-g', '--gap-tolerance', type=int, default=20, help='ignore gaps this size or smaller')
 parser.add_argument('-v', '--verbose', action='store_true', help='print stats about reads to stderr')
 parser.add_argument('-o', '--output-name', type=str, default='', help='name of output file of reads to keep (default: BAMNAME-keep-reads.txt)')
@@ -70,11 +71,11 @@ if ("chr" in region[0]) != ("chr" in bam.references[0]):
 for read in bam.fetch(region[0], region[1], region[2]):
     keep_reads.add(read.query_name)
 
-    ### filter reads tobam  consider only those that touch both flanks
+    ### filter reads to consider only those that touch both flanks
     if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
 
         ### collect positions of deletions
-        read_deletions = get_deletion_positions(read, region)
+        read_deletions = get_deletion_positions(read, region, args.gap_tolerance)
         for pos in read_deletions:
             if pos not in all_deletion_positions_dict:
                 all_deletion_positions_dict[pos] = [read.query_name]
@@ -91,14 +92,14 @@ for read in discard_reads:
     keep_reads.remove(read)
 
 ### parse bam name
-bam_name = re.split("[.]", args.bam)[0]
+bam_name = re.sub(".bam", "", args.bam)
 if args.output_name != "":
     keep_reads_name = args.output_name
 else:
-    keep_reads_name = "."join(bam_name, "keep-reads.txt")
+    keep_reads_name = ".".join([bam_name, "keep-reads.txt"])
 
 ### write read list to file
-file = open(keep_reads_name, "W")
+file = open(keep_reads_name, "w")
 for read in keep_reads:
     file.write("%s\n" % read)
 file.close()
