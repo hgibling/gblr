@@ -34,10 +34,10 @@ def get_deletion_positions(read, region, gap_tolerance=args.gap_tolerance):
 ### parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-b', '--bam', type=str, required=True, help='bam file of aligned sequencing reads')
-parser.add_argument('-r', '--region', type=str, default="chr5:23526673,23527764", help='position of one region of interest (ex: chr1:100000-200000)')
+parser.add_argument('-r', '--region', type=str, default='chr5:23526673,23527764', help='position of one region of interest (ex: chr1:100000-200000)')
 parser.add_argument('-g', '--gap-tolerance', type=int, default=20, help='ignore gaps this size or smaller')
 parser.add_argument('-v', '--verbose', action='store_true', help='print stats about reads to stderr')
-parser.add_argument('-o', '--output-name', type=str, required=True, help='name of file to filtered bam')
+parser.add_argument('-o', '--output-name', type=str, default='', help='name of output file of reads to keep (default: BAMNAME-keep-reads.txt)')
 args = parser.parse_args()
 
 ### check arguments
@@ -92,7 +92,10 @@ for read in discard_reads:
 
 ### parse bam name
 bam_name = re.split("[.]", args.bam)[0]
-keep_reads_name = "."join(bam_name, "keep-reads.txt")
+if args.output_name != "":
+    keep_reads_name = args.output_name
+else:
+    keep_reads_name = "."join(bam_name, "keep-reads.txt")
 
 ### write read list to file
 file = open(keep_reads_name, "W")
