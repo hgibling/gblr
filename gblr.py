@@ -79,33 +79,6 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     # return values for subsetting
     return [left_chop, right_chop]
 
-# get positions of indels for filtering
-def get_deletion_positions(read, region):
-    split_cigar = [x for x in re.findall('[0-9]*[A-Z=]', read.cigarstring) if not 'S' in x]
-    reference_pos = read.reference_start + 1
-    deletion_positions = []
-
-    # parse if cigar has deletions
-    if any(chunk.endswith('D') for chunk in split_cigar):
-        for chunk in split_cigar:
-            # advance reference_pos for each match and deletion (insertions ignored as they are not in reference)
-            if chunk.endswith(('M', 'X', '=')):
-                print("%s match at %d" % (read.query_name, reference_pos))
-                reference_pos += int(chunk[:chunk.find('MX=')])
-            elif chunk.endswith('D'):
-                # only consider deletions > 10bp
-                if int(chunk[:chunk.find('D')]) > 10:
-                    deletion_positions.append(":".join([str(reference_pos), str(reference_pos + int(chunk[:chunk.find('D')]) - 1)]))
-                    print("big del!")
-                print("%s del at %d" % (read.query_name, reference_pos))
-                reference_pos += int(chunk[:chunk.find('D')])
-        if len(deletion_positions) == 0:
-            deletion_positions.append('None')
-    else:
-        deletion_positions = ['None']
-    return(deletion_positions)
-
-
 # get multiple sequence alignment
 def get_MSA(allele, allele_reads_list, all_subset_reads):
     # get read sequences for each allele
@@ -197,15 +170,14 @@ parser.add_argument('-l', '--flank-length', type=int, default=10000, help='lengt
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
 parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estimate of the sequencing error rate')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
+parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
+parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
+parser.add_argument('-c', '--verboser', action='store_true', help='print consensus sequences to output-name.consensus.fa')
+parser.add_argument('-C', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
-parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
-parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
-parser.add_argument('-V', '--verboser', action='store_true', help='print consensus sequences to output-name.consensus.fa')
-parser.add_argument('-c', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
-parser.add_argument('-A', '--alignments', type=str, help='print alignments of specified alleles (separated by commas; ex: C,D,L18) plus best allele to stderr')
 parser.add_argument('-o', '--output-name', type=str, required=True, help='name of file to save scores/calls')
 args = parser.parse_args()
 
@@ -392,10 +364,6 @@ else:
         print(allele_edit_distances.to_string(), file=sys.stderr)
         ### remove sum row for further analysis
         allele_edit_distances = allele_edit_distances[:-1]
-
-    ### remove reads with unique deletion positions (likely PCR artefact)
-    
-    
 
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
