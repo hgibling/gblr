@@ -354,12 +354,13 @@ else:
 
         ### from top genotype, find out which read is most likely from which allele
         top_genotype_split = all_scores.index[0].split('/')
-        reads_best_allele = allele_edit_distances[top_genotype_split].idxmin(axis=1)
+        allele_edit_distances_stack = allele_edit_distances.stack()
+        reads_best_allele = allele_edit_distances_stack[allele_edit_distances_stack.eq(allele_edit_distances_stack.groupby(level=0).transform('min'))].reset_index()
 
         top_genotype_subset_reads = {}
 
         for a in top_genotype_split:
-            top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele==a].index)
+            top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele.level_1==a].level_0)
 
         ### get consensus sequences of the reads for each allele in the top genotype
         novel_alleles = []
