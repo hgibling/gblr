@@ -288,8 +288,6 @@ else:
     region = re.split("[:,-]", args.region)
     region = [region[0], int(region[1]), int(region[2])]
     all_alignments = {}
-    if args.alignments != None:
-        alignment_alleles = args.alignments.split(",")
 
     ### check chromosome naming convention and update region if needed
     if ("chr" in region[0]) != ("chr" in reads.references[0]):
@@ -336,10 +334,6 @@ else:
 
     ### get table of edit distances         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
-
-    ### for each read, get allele with best alignment
-    if args.alignments != None:
-        best_alleles = allele_edit_distances.idxmin(axis=1)
 
     if args.verbose:
         ### get sum of edit distances to print
@@ -446,17 +440,5 @@ else:
         N_geno += 1
         if (args.print_top_N_genos > 0) & (N_geno == args.print_top_N_genos):
             break
-
-    ### for each read, print alignments for best allele and specified alleles
-    if args.alignments != None:
-        for read, dictionary in all_edit_distances.items():
-            print("Read %s: best alelle was %s (ED=%d)" % (read, best_alleles[read], dictionary.get(best_alleles[read])), file=sys.stderr)
-            print("\n".join(all_alignments[read][best_alleles[read]].values()), file=sys.stderr)
-            print("\n", file=sys.stderr)
-            for a in alignment_alleles:
-                print("Compare to alginment to allele %s (ED=%d):" % (a, dictionary[a]), file=sys.stderr)
-                print("\n".join(all_alignments[read][a].values()), file=sys.stderr)
-                print("\n", file=sys.stderr)
-            print("---\n", file=sys.stderr)
 
 results_file.close
