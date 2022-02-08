@@ -302,7 +302,6 @@ else:
         ### filter reads to consider only those that touch both flanks
         if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
             read_distance_dict = dict.fromkeys(allele_names)
-            read_alignment_dict = dict.fromkeys(allele_names)
                 
             ### subset read to just the region of interest
             chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2])
@@ -326,7 +325,6 @@ else:
                     if subset_alignment['editDistance'] <= best_distance:
                         read_distance_dict[allele_name] = subset_alignment['editDistance']
                         best_distance = subset_alignment['editDistance']
-                        read_alignment_dict[allele_name] = edlib.getNiceAlignment(subset_alignment, strand_sequence, allele_sequence[args.flank_length : -args.flank_length])
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
