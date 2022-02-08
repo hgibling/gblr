@@ -328,7 +328,6 @@ else:
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
-            all_alignments[read.query_name] = read_alignment_dict
 
     ### get table of edit distances         # TODO: deal with null values
     allele_edit_distances = pd.DataFrame.from_dict(all_edit_distances, orient='index')
