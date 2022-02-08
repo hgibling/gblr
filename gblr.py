@@ -13,8 +13,6 @@ import pandas as pd
 import pyabpoa as pa
 import pysam
 import re
-import shlex
-import subprocess
 import sys
 
 ### define functions
@@ -105,36 +103,6 @@ def get_deletion_positions(read, region):
         deletion_positions = ['None']
     return(deletion_positions)
 
-
-# get multiple sequence alignment
-def get_MSA(allele, allele_reads_list, all_subset_reads):
-    # get read sequences for each allele
-    temp_genotype_reads_dict = dict.fromkeys(allele_reads_list, 0)
-    for read in temp_genotype_reads_dict.keys():
-        temp_genotype_reads_dict[read] = all_subset_reads[read]
-
-    # write reads to temporary fasta
-    fasta_name = "-".join([args.reads, allele, "reads-TEMP.fa"])
-    outfile = open(fasta_name, "w")
-    for read, sequence in temp_genotype_reads_dict.items():
-        outfile.write(">" + read + "\n")
-        outfile.write(sequence + "\n")
-    outfile.close
-
-    # run mafft to get multiple sequence alignment
-    mafft_command = "mafft --globalpair --maxiterate 1000 --quiet " + fasta_name
-    arguments = shlex.split(mafft_command)
-    aligned_name = "-".join([args.reads, allele, "aligned-TEMP.fa"])
-    with open(aligned_name, "w+") as outfile:
-        out = subprocess.run(arguments, stdout=outfile)
-    reads_MSA = AlignIO.read(aligned_name, "fasta")
-
-    # delete temporary files
-    os.remove(fasta_name)
-    os.remove(aligned_name)
-
-    return(reads_MSA)
-
 # get MSA with ABPOA
 def get_POA_MSA(allele, allele_reads_list, all_subset_reads):
     # define aligner parameters
@@ -143,12 +111,9 @@ def get_POA_MSA(allele, allele_reads_list, all_subset_reads):
     reads = [all_subset_reads[key] for key in allele_reads_list]
     # align all reads
     reads_MSA = aligner.msa(reads, out_cons=True, out_msa=True)
-    # return list of seqs in MSA format
-    #print(allele_reads_list)
-    #print(reads_MSA.msa_seq)
-    print(allele)
-    print(reads_MSA.cons_seq)
-    return(reads_MSA.msa_seq)
+    # return list of seqs in MSA format, as well as consensus sequence
+    # list{msa: [reads], consensus: [consensusseq]}
+    return({'MSA':reads_MSA.msa_seq, 'consensus':reads_MSA.cons_seq})
     
 # all IUPAC ambiguous nucleotides
 IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'GT', 'M':'AC', 'B':'CGT', 'D':'AGT', 'H':'ACT', 'V':'ACG', 'N':'ACGT'}
@@ -324,7 +289,6 @@ else:
     region = re.split("[:,-]", args.region)
     region = [region[0], int(region[1]), int(region[2])]
     all_alignments = {}
-    all_deletion_positions_dict = {'None': []}
     if args.alignments != None:
         alignment_alleles = args.alignments.split(",")
 
@@ -342,14 +306,6 @@ else:
         if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
             read_distance_dict = dict.fromkeys(allele_names)
             read_alignment_dict = dict.fromkeys(allele_names)
-
-            ### collect positions of deletions
-            read_deletions = get_deletion_positions(read, region)
-            for pos in read_deletions:
-                if pos not in all_deletion_positions_dict:
-                    all_deletion_positions_dict[pos] = [read.query_name]
-                else:
-                    all_deletion_positions_dict[pos].append(read.query_name)
                 
             ### subset read to just the region of interest
             chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2])
@@ -393,10 +349,6 @@ else:
         ### remove sum row for further analysis
         allele_edit_distances = allele_edit_distances[:-1]
 
-    ### remove reads with unique deletion positions (likely PCR artefact)
-    
-    
-
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
 
@@ -422,12 +374,12 @@ else:
         ### get consensus sequences of the reads for each allele in the top genotype
         novel_alleles = []
         known_alleles = []
-        IUPAC_multiambiguous_to_nucleotides = {key: value for key, value in IUPAC_ambiguous_to_nucleotides.items() if len(value) > 2}
 
         for allele in top_genotype_subset_reads.keys():
-            # read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
+            #read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             read_MSA = get_POA_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
-            read_consensus = get_consensus(read_MSA)
+            read_consensus = get_consensus(read_MSA['MSA'])
+            #read_consensus = read_MSA['consensus'][0]
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
             # check for novel haplotypes
             if read_consensus != allele_subsequence:
@@ -439,59 +391,55 @@ else:
                     consensus_file.close
                 # if top genotype was homozygous, check if consensus sequence indicates the novel allele is heterozygous or not
                 if len(top_genotype_subset_reads.keys()) == 1:
-                    if any(nuc in read_consensus for nuc in IUPAC_ambiguous_to_nucleotides):
-                        novel_alleles.append("ambiguous")
-                    else:
+                    check_ambiguous = [nuc in read_consensus for nuc in IUPAC_ambiguous_to_nucleotides]
+                    if sum(check_ambiguous) == 0:
                         novel_alleles.append("same")
-                        ### TODO: get more specific about ambiguous consensus sequences
-                        # check for ambiguous nucleotides representing 3+ bases
-                        # if any(nuc in read_consensus for nuc in IUPAC_multiambiguous_to_nucleotides):
-                        #     novel_alleles.append("multi") # 3+ allele sequences, so at least 2 do not match allele sequence: het
-                        # else:
-                        #     novel_alleles.append("bi") # either two different novel alleles both similar to parent allele, or one novel and one known: TODO: differentiate these
-                        #     # TODO
-                        #     # biambiguous: need to generate all possible consensus sequences
-                        #     # read_consensus_1 = ""
-                        #     # read_consensus_2 = ""
-                        #     # for nuc in read_consensus:
-                        #     #     if nuc in IUPAC_ambiguous_to_nucleotides:
-                        #     #         read_consensus_1 += IUPAC_ambiguous_to_nucleotides[nuc][0]
-                        #     #         read_consensus_2 += IUPAC_ambiguous_to_nucleotides[nuc][1]
-                        #     #     else:
-                        #     #         read_consensus_1 += nuc
-                        #     #         read_consensus_2 += nuc
-                        #     # compare each unambiguous-consensus sequence to the best allele               
+                    elif sum(check_ambiguous) == 1:
+                        ambiguous_nuc = [nuc for i, nuc in enumerate(list(IUPAC_ambiguous_to_nucleotides.keys())) if check_ambiguous[i]]
+                        ambiguous_nuc_position = read_consensus.find(ambiguous_nuc[0])
+                        consensus1 = read_consensus[0:ambiguous_nuc_position] + IUPAC_ambiguous_to_nucleotides[ambiguous_nuc[0]][0] + read_consensus[ambiguous_nuc_position+1:]
+                        consensus2 = read_consensus[0:ambiguous_nuc_position] + IUPAC_ambiguous_to_nucleotides[ambiguous_nuc[0]][1] + read_consensus[ambiguous_nuc_position+1:]
+                        if consensus1 == allele_subsequence or consensus2 == allele_subsequence:
+                            novel_alleles.append("one_known")
+                        else:
+                            novel_alleles.append("neither_known")
+                    else:
+                        novel_alleles.append("ambiguous")      
             else:
                 known_alleles.append(allele)
 
         # if there are any novel alleles detected, add them to the top of the likelihood results
+        # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score
         if len(novel_alleles) > 0:
-            novel_name = "_".join(["Novel_Similar", novel_alleles[0]])
-            if len(novel_alleles) == 1:
-                print_out_one = "/".join([novel_name, known_alleles[0]])
-                print(print_out_one, "1", sep=args.delimiter, file=results_file)
+            novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
+            if len(novel_alleles) == 1 and len(known_alleles) == 1:
+                # two base alleles, one novel and one known (ex. NovelA/B)
+                # TODO: add check for ambig in preivous step?
+                print("/".join([novel_name1, known_alleles[0]]), "1", sep=args.delimiter, file=results_file)
             elif len(novel_alleles) == 2:
-                if "ambiguous" in novel_alleles:
-                    print_out_ambiguous = "/".join([novel_name, "_".join([novel_alleles[0], "or_Different", novel_name])])
-                    print(print_out_ambiguous, "1", sep=args.delimiter, file=results_file)
+                if "one_known" in novel_alleles:
+                    # one base allele, one novel and one known (ex. NovelA/A)
+                    print("/".join([novel_name1, novel_alleles[0]]), "1", sep=args.delimiter, file=results_file)
+                elif "neither_known" in novel_alleles:
+                    # one base allele, two different novel alleles (ex. NovelA.a/NovelA.b)
+                    novel_name2 = "_".join(["Different_Novel_Similar", novel_alleles[0]])
+                    print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)
                 elif "same" in novel_alleles:
-                    print_out_same = "/".join([novel_name, novel_name])
-                    print(print_out_same, "1", sep=args.delimiter, file=results_file)
-                ### TODO: get more specific about ambiguous consensus sequences
-                # if "multi" in novel_alleles:
-                #     print_out_multi = "/".join([novel_name, "_".join(["Different", novel_name])])
-                #     print(print_out_multi, "1", sep=args.delimiter, file=results_file)
-                # elif "bi" in novel_alleles:
-                #     print_out_bi = "/".join([novel_name, "_".join([novel_alleles[0], "or", novel_name])])
-                #     print(print_out_bi, "1", sep=args.delimiter, file=results_file)
+                    # one base alelle, same novel (ex. NovelA.a/NovelA.a)
+                    novel_name2 = "_".join(["Same_Novel_Similar", novel_alleles[0]])
+                    print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)
+                elif "ambiguous" in novel_alleles:
+                    # one base allele, one novel but second ambiguous if known or a different novel (ex. NovelA.a/A or NovelA.a/NovelA.b)
+                    novel_name2 = "_".join([novel_alleles[0], "or_Different_Novel_Similar", novel_alleles[0]])
+                    print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)
                 else:
+                    # two base alleles, two novel (ex. NovelA/NovelB)
                     novel_name2 = "_".join(["Novel_Similar", novel_alleles[1]])
-                    print_out_two = "/".join([novel_name, novel_name2])
-                    print(print_out_two, "1", sep=args.delimiter, file=results_file)
-            # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score
+                    print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)
 
     else:   # haploid calling
         all_scores = allele_edit_distances.sum().sort_values()
+        # TODO: check for novel alleles
     
     ### print results (allele or genotype name, score)
     for name, score in all_scores.items():
