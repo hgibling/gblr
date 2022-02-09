@@ -37,7 +37,7 @@ parser.add_argument('-b', '--bam', type=str, required=True, help='bam file of al
 parser.add_argument('-r', '--region', type=str, default='chr5:23526673,23527764', help='position of one region of interest (ex: chr1:100000-200000)')
 parser.add_argument('-f', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions outside the region of interest')
 parser.add_argument('-g', '--gap-tolerance', type=int, default=20, help='ignore gaps this size or smaller')
-parser.add_argument('-R', '--read-threshold', type=float, default=0.2, help='proportion of reads that must have a specific deletion in order to consider the deletion at that position ok')
+parser.add_argument('-R', '--read-threshold', type=float, default=0.25, help='proportion of reads that must have a specific deletion in order to consider the deletion at that position ok')
 parser.add_argument('-v', '--verbose', action='store_true', help='print stats about reads to stderr')
 parser.add_argument('-o', '--output-name', type=str, default='', help='name of output file of reads to keep (default: BAMNAME-keep-reads.txt)')
 args = parser.parse_args()
