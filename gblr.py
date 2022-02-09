@@ -167,11 +167,7 @@ parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estima
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
 parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
-<<<<<<< HEAD
 parser.add_argument('-c', '--consensus_sequence', action='store_true', help='print consensus sequences to output-name.consensus.fa')
-=======
-parser.add_argument('-c', '--verboser', action='store_true', help='print consensus sequences to output-name.consensus.fa')
->>>>>>> f0fb6468c7ff56e4249ad0e217594664cc42884b
 parser.add_argument('-C', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
@@ -446,20 +442,4 @@ else:
         if (args.print_top_N_genos > 0) & (N_geno == args.print_top_N_genos):
             break
 
-<<<<<<< HEAD
 results_file.close
-=======
-    ### for each read, print alignments for best allele and specified alleles
-    if args.alignments != None:
-        for read, dictionary in all_edit_distances.items():
-            print("Read %s: best alelle was %s (ED=%d)" % (read, best_alleles[read], dictionary.get(best_alleles[read])), file=sys.stderr)
-            print("\n".join(all_alignments[read][best_alleles[read]].values()), file=sys.stderr)
-            print("\n", file=sys.stderr)
-            for a in alignment_alleles:
-                print("Compare to alginment to allele %s (ED=%d):" % (a, dictionary[a]), file=sys.stderr)
-                print("\n".join(all_alignments[read][a].values()), file=sys.stderr)
-                print("\n", file=sys.stderr)
-            print("---\n", file=sys.stderr)
-
-results_file.close
->>>>>>> f0fb6468c7ff56e4249ad0e217594664cc42884b
