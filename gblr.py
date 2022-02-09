@@ -77,31 +77,34 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     # return values for subsetting
     return [left_chop, right_chop]
 
-# get positions of indels for filtering
-def get_deletion_positions(read, region):
-    split_cigar = [x for x in re.findall('[0-9]*[A-Z=]', read.cigarstring) if not 'S' in x]
-    reference_pos = read.reference_start + 1
-    deletion_positions = []
+# get multiple sequence alignment
+def get_MSA(allele, allele_reads_list, all_subset_reads):
+    # get read sequences for each allele
+    temp_genotype_reads_dict = dict.fromkeys(allele_reads_list, 0)
+    for read in temp_genotype_reads_dict.keys():
+        temp_genotype_reads_dict[read] = all_subset_reads[read]
 
-    # parse if cigar has deletions
-    if any(chunk.endswith('D') for chunk in split_cigar):
-        for chunk in split_cigar:
-            # advance reference_pos for each match and deletion (insertions ignored as they are not in reference)
-            if chunk.endswith(('M', 'X', '=')):
-                print("%s match at %d" % (read.query_name, reference_pos))
-                reference_pos += int(chunk[:chunk.find('MX=')])
-            elif chunk.endswith('D'):
-                # only consider deletions > 10bp
-                if int(chunk[:chunk.find('D')]) > 10:
-                    deletion_positions.append(":".join([str(reference_pos), str(reference_pos + int(chunk[:chunk.find('D')]) - 1)]))
-                    print("big del!")
-                print("%s del at %d" % (read.query_name, reference_pos))
-                reference_pos += int(chunk[:chunk.find('D')])
-        if len(deletion_positions) == 0:
-            deletion_positions.append('None')
-    else:
-        deletion_positions = ['None']
-    return(deletion_positions)
+    # write reads to temporary fasta
+    fasta_name = "-".join([args.reads, allele, "reads-TEMP.fa"])
+    outfile = open(fasta_name, "w")
+    for read, sequence in temp_genotype_reads_dict.items():
+        outfile.write(">" + read + "\n")
+        outfile.write(sequence + "\n")
+    outfile.close
+
+    # run mafft to get multiple sequence alignment
+    mafft_command = "mafft --globalpair --maxiterate 1000 --quiet " + fasta_name
+    arguments = shlex.split(mafft_command)
+    aligned_name = "-".join([args.reads, allele, "aligned-TEMP.fa"])
+    with open(aligned_name, "w+") as outfile:
+        out = subprocess.run(arguments, stdout=outfile)
+    reads_MSA = AlignIO.read(aligned_name, "fasta")
+
+    # delete temporary files
+    os.remove(fasta_name)
+    os.remove(aligned_name)
+
+    return(reads_MSA)
 
 # get MSA with ABPOA
 def get_POA_MSA(allele, allele_reads_list, all_subset_reads):
@@ -164,7 +167,11 @@ parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estima
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
 parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
+<<<<<<< HEAD
 parser.add_argument('-c', '--consensus_sequence', action='store_true', help='print consensus sequences to output-name.consensus.fa')
+=======
+parser.add_argument('-c', '--verboser', action='store_true', help='print consensus sequences to output-name.consensus.fa')
+>>>>>>> f0fb6468c7ff56e4249ad0e217594664cc42884b
 parser.add_argument('-C', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype')
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
@@ -439,4 +446,20 @@ else:
         if (args.print_top_N_genos > 0) & (N_geno == args.print_top_N_genos):
             break
 
+<<<<<<< HEAD
 results_file.close
+=======
+    ### for each read, print alignments for best allele and specified alleles
+    if args.alignments != None:
+        for read, dictionary in all_edit_distances.items():
+            print("Read %s: best alelle was %s (ED=%d)" % (read, best_alleles[read], dictionary.get(best_alleles[read])), file=sys.stderr)
+            print("\n".join(all_alignments[read][best_alleles[read]].values()), file=sys.stderr)
+            print("\n", file=sys.stderr)
+            for a in alignment_alleles:
+                print("Compare to alginment to allele %s (ED=%d):" % (a, dictionary[a]), file=sys.stderr)
+                print("\n".join(all_alignments[read][a].values()), file=sys.stderr)
+                print("\n", file=sys.stderr)
+            print("---\n", file=sys.stderr)
+
+results_file.close
+>>>>>>> f0fb6468c7ff56e4249ad0e217594664cc42884b
