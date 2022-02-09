@@ -77,37 +77,8 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     # return values for subsetting
     return [left_chop, right_chop]
 
-# get multiple sequence alignment
+# get multiple sequence alignment with ABPOA
 def get_MSA(allele, allele_reads_list, all_subset_reads):
-    # get read sequences for each allele
-    temp_genotype_reads_dict = dict.fromkeys(allele_reads_list, 0)
-    for read in temp_genotype_reads_dict.keys():
-        temp_genotype_reads_dict[read] = all_subset_reads[read]
-
-    # write reads to temporary fasta
-    fasta_name = "-".join([args.reads, allele, "reads-TEMP.fa"])
-    outfile = open(fasta_name, "w")
-    for read, sequence in temp_genotype_reads_dict.items():
-        outfile.write(">" + read + "\n")
-        outfile.write(sequence + "\n")
-    outfile.close
-
-    # run mafft to get multiple sequence alignment
-    mafft_command = "mafft --globalpair --maxiterate 1000 --quiet " + fasta_name
-    arguments = shlex.split(mafft_command)
-    aligned_name = "-".join([args.reads, allele, "aligned-TEMP.fa"])
-    with open(aligned_name, "w+") as outfile:
-        out = subprocess.run(arguments, stdout=outfile)
-    reads_MSA = AlignIO.read(aligned_name, "fasta")
-
-    # delete temporary files
-    os.remove(fasta_name)
-    os.remove(aligned_name)
-
-    return(reads_MSA)
-
-# get MSA with ABPOA
-def get_POA_MSA(allele, allele_reads_list, all_subset_reads):
     # define aligner parameters
     aligner = pa.msa_aligner()
     # get reads of interest
@@ -160,7 +131,7 @@ def get_consensus(reads_MSA, threshold = 0.35, ambiguous = IUPAC_ambiguous_to_nu
 parser = argparse.ArgumentParser()
 parser.add_argument('-a', '--alleles', type=str, required=True, help='fasta file of sequences for alleles or region of interest, including flanking sequences')
 parser.add_argument('-r', '--reads', type=str, required=True, help='bam file of aligned sequencing reads (or fastx if --quick-count is specified)')
-parser.add_argument('-R', '--region', type=str, default="5:23526782,23527873", help='position of the region of interest (ex: chr1:100000-200000)')
+parser.add_argument('-R', '--region', type=str, default="5:23526673,23527764", help='position of the region of interest (ex: chr1:100000-200000)')
 parser.add_argument('-l', '--flank-length', type=int, default=10000, help='length of sequences flanking alleles')
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
 parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estimate of the sequencing error rate')
@@ -369,10 +340,8 @@ else:
         known_alleles = []
 
         for allele in top_genotype_subset_reads.keys():
-            #read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
-            read_MSA = get_POA_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
+            read_MSA = get_MSA(allele, top_genotype_subset_reads[allele], all_subset_reads)
             read_consensus = get_consensus(read_MSA['MSA'])
-            #read_consensus = read_MSA['consensus'][0]
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
             # check for novel haplotypes
             if read_consensus != allele_subsequence:
