@@ -378,7 +378,7 @@ else:
             # check for novel haplotypes
             if read_consensus != allele_subsequence:
                 novel_alleles.append(allele)
-                if args.verboser:
+                if args.consensus_sequence:
                     consensus_file = open(args.output_name + ".consensus.fa", "a")
                     print(">consensus sequence for reads that best align to allele %s" % (allele), file=consensus_file)
                     print(read_consensus, file=consensus_file)
