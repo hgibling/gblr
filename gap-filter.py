@@ -72,10 +72,10 @@ if ("chr" in region[0]) != ("chr" in bam.references[0]):
 
 ### iterate over reads that overlap with region of interest
 for read in bam.fetch(region[0], region[1], region[2]):
-    keep_reads.add(read.query_name)
 
     ### filter reads to consider only those that touch both flanks
     if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
+        keep_reads.add(read.query_name)
 
         ### collect positions of deletions
         read_deletions = get_deletion_positions(read, region, args.gap_tolerance)
