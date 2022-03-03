@@ -6,6 +6,7 @@ import os
 import pysam
 import re
 import sys
+import warnings
 
 ### define functions
 # get positions of deletions indels
@@ -38,6 +39,7 @@ parser.add_argument('-r', '--region', type=str, default='chr5:23526673,23527764'
 parser.add_argument('-f', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions outside the region of interest')
 parser.add_argument('-g', '--gap-tolerance', type=int, default=20, help='ignore gaps this size or smaller')
 parser.add_argument('-R', '--read-threshold', type=float, default=0.25, help='proportion of reads that must have a specific deletion in order to consider the deletion at that position ok')
+parser.add_argument('-l', '--length-multiple', type=int, default=-1, help='toss reads with gaps that do not correspond to expected repeat length X or multiple thereof (default: ignore flag)')
 parser.add_argument('-v', '--verbose', action='store_true', help='print stats about reads to stderr')
 parser.add_argument('-o', '--output-name', type=str, default='', help='name of output file of reads to keep (default: BAMNAME-keep-reads.txt)')
 args = parser.parse_args()
@@ -49,6 +51,8 @@ if args.read_threshold < 0 or args.read_threshold > 1:
     exit("ERROR: read threshold must be a proportion (between 0 and 1). Check parameters.")
 if len(re.split("[:,-]", args.region)) != 3:
     exit("ERROR: region must have a chromosome, start, and end position. Check parameters.")
+if args.length_multiple < -1 | args.length_multiple == 0:
+    warnings.warn("Gap length filter should be a positive integer if intended for use. Negative integers and zero are ignored and no length filter will be applied.")
 
 ### get read sequences
 try:
@@ -88,9 +92,23 @@ for read in bam.fetch(region[0], region[1], region[2]):
 ### get set of reads that have a large deletion at a unique position
 all_reads_length = len(keep_reads)
 read_number_threshold = round(all_reads_length * args.read_threshold)
+print("dict is %i, num reads threshold is %i" % (len(all_deletion_positions_dict), read_number_threshold), file=sys.stderr)
 for gap, reads in all_deletion_positions_dict.items():
-    if len(reads) < read_number_threshold:
+    # print("gap is %s" % gap, file=sys.stderr)
+    if 'None' in gap:
+        continue
+    elif len(reads) < read_number_threshold:
         discard_reads.update(reads)
+        # print("gap is %s, len reads is %i" % (gap, len(reads)), file=sys.stderr)
+    elif args.length_multiple > 0:
+        #print("gap is %s" % gap, file=sys.stderr)
+        # toss reads if gap is not expected repeat length or multiple thereof
+        gap_split = gap.split(":")
+        if (int(gap_split[1]) - int(gap_split[0])) % args.length_multiple != 0:
+            print("bad gap is %i" % (int(gap_split[1]) - int(gap_split[0])), file=sys.stderr)
+            discard_reads.update(reads)
+        else:
+            print("good gap is %i" % (int(gap_split[1]) - int(gap_split[0])), file=sys.stderr)
 
 for read in discard_reads:
     keep_reads.remove(read)
