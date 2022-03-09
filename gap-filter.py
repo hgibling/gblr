@@ -105,8 +105,10 @@ for gap, reads in all_deletion_positions_dict.items():
         discard_reads.update(reads)
     elif args.length_multiple > 0:
         gap_split = gap.split(":")
-        if (int(gap_split[1]) - int(gap_split[0]) + 1) % args.length_multiple > args.length_tolerance:
+        gap_size = int(gap_split[1]) - int(gap_split[0]) + 1
+        if gap_size % args.length_multiple > args.length_tolerance:
             # toss reads with deletionss not a multiple of expected gap length
+            # TODO: deal with gaps less than multiple but within tolerance range (modulo no good)
             discard_reads.update(reads)
 
 ### remove tossed reads from keep set
