@@ -325,16 +325,18 @@ else:
         ### get overall likelihood for each genotype
         # series[genos: likelihood]
         all_scores = genotype_edit_distances.sum().sort_values(ascending=False)
+        print("Top genotype is %s" % (all_scores.index[0]), file=sys.stderr)
 
         ### from top genotype, find out which reads are most likely from which allele
         top_genotype_split = all_scores.index[0].split('/')
-        allele_edit_distances_stack = allele_edit_distances.stack()
+        allele_edit_distances_stack = allele_edit_distances[top_genotype_split].stack()
         reads_best_allele = allele_edit_distances_stack[allele_edit_distances_stack.eq(allele_edit_distances_stack.groupby(level=0).transform('min'))].reset_index()
 
         top_genotype_subset_reads = {}
 
         for a in top_genotype_split:
             top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele.level_1==a].level_0)
+            print("Number of reads that best align to allele %s in the top genotype: %d" % (a, len(top_genotype_subset_reads[a])), file=sys.stderr)
             if args.verbose_reads:
                 reads_file = open(args.output_name + "." + a + "-reads.txt", "a")
                 for read in top_genotype_subset_reads[a]:
