@@ -138,6 +138,7 @@ parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estima
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
 parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
+parser.add_argument('-V', '--verbose-reads', action='store_true', help='print list of reads that best align to each allele in top genotype')
 parser.add_argument('-c', '--consensus_sequence', action='store_true', help='print consensus sequences to output-name.consensus.fa')
 # parser.add_argument('-C', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype to stderr') # TODO
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
@@ -325,7 +326,7 @@ else:
         # series[genos: likelihood]
         all_scores = genotype_edit_distances.sum().sort_values(ascending=False)
 
-        ### from top genotype, find out which read is most likely from which allele
+        ### from top genotype, find out which reads are most likely from which allele
         top_genotype_split = all_scores.index[0].split('/')
         allele_edit_distances_stack = allele_edit_distances.stack()
         reads_best_allele = allele_edit_distances_stack[allele_edit_distances_stack.eq(allele_edit_distances_stack.groupby(level=0).transform('min'))].reset_index()
@@ -334,6 +335,11 @@ else:
 
         for a in top_genotype_split:
             top_genotype_subset_reads[a] = list(reads_best_allele[reads_best_allele.level_1==a].level_0)
+            if args.verbose_reads:
+                reads_file = open(args.output_name + "." + a + "-reads.txt", "a")
+                for read in top_genotype_subset_reads[a]:
+                    print(read, file=reads_file)
+                reads_file.close
 
         ### get consensus sequences of the reads for each allele in the top genotype
         novel_alleles = []
