@@ -328,7 +328,7 @@ else:
         print("Top genotype is %s" % (all_scores.index[0]), file=sys.stderr)
 
         ### from top genotype, find out which reads are most likely from which allele
-        top_genotype_split = all_scores.index[0].split('/')
+        top_genotype_split = list(set(all_scores.index[0].split('/')))
         allele_edit_distances_stack = allele_edit_distances[top_genotype_split].stack()
         reads_best_allele = allele_edit_distances_stack[allele_edit_distances_stack.eq(allele_edit_distances_stack.groupby(level=0).transform('min'))].reset_index()
 
