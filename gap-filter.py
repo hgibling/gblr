@@ -10,34 +10,43 @@ import warnings
 
 ### define functions
 # get positions of deletions indels
-def get_deletion_positions(read, region, gap_tolerance):
+def get_indel_positions(read, region, gap_tolerance):
     split_cigar = [x for x in re.findall('[0-9]*[A-Z=]', read.cigarstring) if not 'S' in x]
     reference_pos = read.reference_start + 1
     deletion_positions = []
+    insertion_positions = []
 
-    # parse if cigar has deletions
-    if any(chunk.endswith('D') for chunk in split_cigar):
+    # parse if cigar has indels
+    if any(chunk.endswith(('D', 'I')) for chunk in split_cigar):
         for chunk in split_cigar:
             # advance reference_pos for each match and deletion (insertions ignored as they are not in reference)
             if chunk.endswith(('M', 'X', '=')):
                 reference_pos += int(chunk[:chunk.find('MX=')])
             elif chunk.endswith('D'):
-                # only consider deletions > 10bp
+                # only consider deletions > gap_tolerance
                 if int(chunk[:chunk.find('D')]) > gap_tolerance:
                     deletion_positions.append(":".join([str(reference_pos), str(reference_pos + int(chunk[:chunk.find('D')]) - 1)]))
                 reference_pos += int(chunk[:chunk.find('D')])
+            elif chunk.endswith('I'):
+                # only consider insertions > gap_tolerance
+                if int(chunk[:chunk.find('I')]) > gap_tolerance:
+                    insertion_positions.append(":".join([str(reference_pos), str(reference_pos + int(chunk[:chunk.find('I')]) - 1)]))
         if len(deletion_positions) == 0:
             deletion_positions.append('None')
+        if len(insertion_positions) == 0:
+            insertion_positions.append('None')
+        
     else:
         deletion_positions = ['None']
-    return(deletion_positions)
+        insertion_positions = ['None']
+    return([deletion_positions, insertion_positions])
 
 ### parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-b', '--bam', type=str, required=True, help='bam file of aligned sequencing reads')
 parser.add_argument('-r', '--region', type=str, default='chr5:23526673,23527764', help='position of one region of interest (ex: chr1:100000-200000)')
 parser.add_argument('-f', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions outside the region of interest')
-parser.add_argument('-g', '--gap-tolerance', type=int, default=20, help='ignore gaps this size or smaller')
+parser.add_argument('-g', '--gap-tolerance', type=int, default=10, help='ignore gaps this size or smaller')
 parser.add_argument('-R', '--read-threshold', type=float, default=0.25, help='proportion of reads that must have a specific deletion in order to consider the deletion at that position ok')
 parser.add_argument('-l', '--length-multiple', type=int, default=0, help='toss reads with gaps that do not correspond to expected repeat length X or multiple thereof (default: ignore flag)')
 parser.add_argument('-L', '--length-tolerance', type=int, default=0, help='allow for length multiple to be within X bases (default: 0)')
@@ -67,8 +76,8 @@ except:
 
 ### define variables
 all_deletion_positions_dict = {'None': []}
+all_insertion_positions_dict = {'None': []}
 keep_reads = set()
-discard_reads = set()
 region = re.split("[:,-]", args.region)
 region = [region[0], int(region[1]), int(region[2])]
 
@@ -87,27 +96,50 @@ for read in bam.fetch(region[0], region[1], region[2]):
         keep_reads.add(read.query_name)
 
         ### collect positions of deletions
-        read_deletions = get_deletion_positions(read, region, args.gap_tolerance)
-        for pos in read_deletions:
+        read_indels = get_indel_positions(read, region, args.gap_tolerance)
+        # deletions
+        for pos in read_indels[0]:
             if pos not in all_deletion_positions_dict:
                 all_deletion_positions_dict[pos] = [read.query_name]
             else:
                 all_deletion_positions_dict[pos].append(read.query_name)
+        # insertions
+        for pos in read_indels[1]:
+            if pos not in all_insertion_positions_dict:
+                all_insertion_positions_dict[pos] = [read.query_name]
+            else:
+                all_insertion_positions_dict[pos].append(read.query_name)
 
 ### get set of reads to delete
 all_reads_length = len(keep_reads)
 read_number_threshold = round(all_reads_length * args.read_threshold)
+discard_reads = set()
+# deletions
 for gap, reads in all_deletion_positions_dict.items():
     if 'None' in gap:
         continue
     elif len(reads) < read_number_threshold:
-        # toss reads that have large deletions at infrequent positions
+        # toss reads that have deletions at infrequent positions
         discard_reads.update(reads)
     elif args.length_multiple > 0:
         gap_split = gap.split(":")
         gap_size = int(gap_split[1]) - int(gap_split[0]) + 1
         if gap_size % args.length_multiple > args.length_tolerance:
             # toss reads with deletionss not a multiple of expected gap length
+            # TODO: deal with gaps less than multiple but within tolerance range (modulo no good)
+            discard_reads.update(reads)
+# insertions # TODO: factorize
+for gap, reads in all_insertion_positions_dict.items():
+    if 'None' in gap:
+        continue
+    elif len(reads) < read_number_threshold:
+        # toss reads that have insertions at infrequent positions
+        discard_reads.update(reads)
+    elif args.length_multiple > 0:
+        gap_split = gap.split(":")
+        gap_size = int(gap_split[1]) - int(gap_split[0]) + 1
+        if gap_size % args.length_multiple > args.length_tolerance:
+            # toss reads with insertions not a multiple of expected gap length
             # TODO: deal with gaps less than multiple but within tolerance range (modulo no good)
             discard_reads.update(reads)
 
