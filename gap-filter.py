@@ -9,7 +9,7 @@ import sys
 import warnings
 
 ### define functions
-# get positions of deletions indels
+# get positions of indels
 def get_indel_positions(read, region, gap_tolerance):
     split_cigar = [x for x in re.findall('[0-9]*[A-Z=]', read.cigarstring) if not 'S' in x]
     reference_pos = read.reference_start + 1
@@ -40,6 +40,31 @@ def get_indel_positions(read, region, gap_tolerance):
         deletion_positions = ['None']
         insertion_positions = ['None']
     return([deletion_positions, insertion_positions])
+
+# toss indels too infrequent or incorrect size
+def toss_indels(gap_positions_dict, read_number_threshold, length_multiple, length_tolerance):
+    discard_reads_set = set()
+    for gap, reads in gap_positions_dict.items():
+        if 'None' in gap:
+            continue
+        elif len(reads) < read_number_threshold:
+            # toss reads that have gap at infrequent positions
+            discard_reads_set.update(reads)
+        elif args.length_multiple > 0:
+            # toss reads with gap not a multiple of expected gap length
+            gap_split = gap.split(":")
+            gap_size = int(gap_split[1]) - int(gap_split[0]) + 1
+            gap_size_multiple_modulo = gap_size % length_multiple
+            if gap_size_multiple_modulo == 0:
+                continue
+            elif (gap_size_multiple_modulo > length_multiple / 2) and (gap_size_multiple_modulo < length_multiple - length_tolerance):
+                # gap is too small and is tossed
+                discard_reads_set.update(reads)
+            elif (gap_size_multiple_modulo < length_multiple / 2) and (gap_size_multiple_modulo > length_tolerance):
+                # gap is too large and is tossed
+                discard_reads_set.update(reads)      
+    return(discard_reads_set) 
+
 
 ### parse arguments
 parser = argparse.ArgumentParser()
@@ -95,7 +120,7 @@ for read in bam.fetch(region[0], region[1], region[2]):
     if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
         keep_reads.add(read.query_name)
 
-        ### collect positions of deletions
+        ### collect positions of indels
         read_indels = get_indel_positions(read, region, args.gap_tolerance)
         # deletions
         for pos in read_indels[0]:
@@ -110,38 +135,13 @@ for read in bam.fetch(region[0], region[1], region[2]):
             else:
                 all_insertion_positions_dict[pos].append(read.query_name)
 
-### get set of reads to delete
+### get set of reads to toss
 all_reads_length = len(keep_reads)
 read_number_threshold = round(all_reads_length * args.read_threshold)
-discard_reads = set()
-# deletions
-for gap, reads in all_deletion_positions_dict.items():
-    if 'None' in gap:
-        continue
-    elif len(reads) < read_number_threshold:
-        # toss reads that have deletions at infrequent positions
-        discard_reads.update(reads)
-    elif args.length_multiple > 0:
-        gap_split = gap.split(":")
-        gap_size = int(gap_split[1]) - int(gap_split[0]) + 1
-        if gap_size % args.length_multiple > args.length_tolerance:
-            # toss reads with deletionss not a multiple of expected gap length
-            # TODO: deal with gaps less than multiple but within tolerance range (modulo no good)
-            discard_reads.update(reads)
-# insertions # TODO: factorize
-for gap, reads in all_insertion_positions_dict.items():
-    if 'None' in gap:
-        continue
-    elif len(reads) < read_number_threshold:
-        # toss reads that have insertions at infrequent positions
-        discard_reads.update(reads)
-    elif args.length_multiple > 0:
-        gap_split = gap.split(":")
-        gap_size = int(gap_split[1]) - int(gap_split[0]) + 1
-        if gap_size % args.length_multiple > args.length_tolerance:
-            # toss reads with insertions not a multiple of expected gap length
-            # TODO: deal with gaps less than multiple but within tolerance range (modulo no good)
-            discard_reads.update(reads)
+
+discard_reads_deletions = toss_indels(all_deletion_positions_dict, read_number_threshold, args.length_multiple, args.length_tolerance)
+discard_reads_insertions = toss_indels(all_insertion_positions_dict, read_number_threshold, args.length_multiple, args.length_tolerance)
+discard_reads = discard_reads_deletions | discard_reads_insertions
 
 ### remove tossed reads from keep set
 for read in discard_reads:
