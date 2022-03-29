@@ -146,6 +146,7 @@ discard_reads = discard_reads_deletions | discard_reads_insertions
 ### remove tossed reads from keep set
 for read in discard_reads:
     keep_reads.remove(read)
+    print(read, file=sys.stderr)
 
 ### parse bam name
 bam_name = re.sub(".bam", "", args.bam)
@@ -162,5 +163,11 @@ file.close()
 
 # print read stats
 if args.verbose:
-    print("Total number of reads: %d" % (all_reads_length), file=sys.stderr)
-    print("Number of reads kept: %d (%f%%)" % (len(keep_reads), round((len(keep_reads)/all_reads_length * 100), 2)), file=sys.stderr)
+    if all_reads_length != 0:
+        print("Total number of reads: %d" % (all_reads_length), file=sys.stderr)
+    else: 
+        exit("ERROR: No reads spanned the full region of interest :(")
+    if len(keep_reads) != 0:
+        print("Number of reads kept: %d (%f%%)" % (len(keep_reads), round((len(keep_reads)/all_reads_length * 100), 2)), file=sys.stderr)
+    else:
+        exit("ERROR: No reads passed the filter :(")
