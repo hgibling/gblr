@@ -369,9 +369,12 @@ else:
             if consensus_seqs[0] == allele_subsequence:
                 known_alleles.append(allele)
                 # consensus_matches.append(0)
-            elif (len(consensus_seqs) == 2) & (consensus_seqs[1] == allele_subsequence):
-                known_alleles.append(allele)
-                # consensus_matches.append(1)
+            elif len(consensus_seqs) == 2:
+                if consensus_seqs[1] == allele_subsequence:
+                    known_alleles.append(allele)
+                    # consensus_matches.append(1)
+                else:
+                    novel_alleles.append(allele)
             else: 
                 novel_alleles.append(allele)
 
@@ -379,7 +382,7 @@ else:
         # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score
         if len(novel_alleles) > 0:
             novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
-            
+
             if len(novel_alleles) == 1:
                 if len(known_alleles) == 1:
                     # only possible if top geno is het
@@ -389,6 +392,7 @@ else:
                     elif len(consensus_seqs) == 1:
                         # unexpected result: give arbitrary value of 99
                         print("/".join([novel_name1, known_alleles[0]]), "99", sep=args.delimiter, file=results_file)
+                        # TODO: improve printout (novel doesnt make sense)
                 elif len(known_alleles) == 0:
                     # only possible if top geno is hom
                     if len(consensus_seqs) == 1:
