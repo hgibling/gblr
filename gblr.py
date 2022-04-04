@@ -361,7 +361,6 @@ else:
 
         novel_alleles = []
         known_alleles = []
-        extra_alleles = []
 
         for allele in top_genotype_split:
             allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
@@ -374,53 +373,52 @@ else:
                 else:
                     novel_alleles.append(allele)
             else: 
-                if len(consensus_seqs) == 1:
-                    extra_alleles.append(allele) # possibly false call by gblr
-                else:
-                    novel_alleles.append(allele)
+                novel_alleles.append(allele)
 
         # if there are any novel alleles detected, add them to the top of the likelihood results
-        # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score
-        if len(novel_alleles) > 0:
+        # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score            
+        if len(novel_alleles) == 1:
             novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
-            if len(novel_alleles) == 1:
-                if len(known_alleles) == 1:
-                    # only possible if top geno is het
-                    if len(consensus_seqs) == 2:
-                        # two base alleles, one novel and one known (ex. NovelA/B)
-                        print("/".join([novel_name1, known_alleles[0]]), "1", sep=args.delimiter, file=results_file)
-                    elif len(consensus_seqs) == 1 and len(extra_alleles) == 1:
-                        # unexpected result: give arbitrary value of 99
-                        extra_name1 = "_".join(["Potential_False", extra_alleles[0]])
-                        print("/".join([known_alleles[0], extra_name1]), "99", sep=args.delimiter, file=results_file)
-                elif len(known_alleles) == 0:
-                    # only possible if top geno is hom
-                    if len(consensus_seqs) == 1:
-                        # one base allele, both same novel (ex. NovelA/NovelA)
-                        print("/".join([novel_name1, novel_name1]), "1", sep=args.delimiter, file=results_file)
-                    elif len(consensus_seqs) == 2:
-                        # one base allele, two different novel alleles (ex. NovelA.a/NovelA.b)
-                        novel_name2 = "_".join(["Different_Novel_Similar", novel_alleles[0]])
-                        print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)
-            elif len(novel_alleles) == 2:
+            if len(known_alleles) == 1:
                 # only possible if top geno is het
+                if len(consensus_seqs) == 1:
+                    # unexpected result: give arbitrary value of 99
+                    extra_name1 = "_".join(["Potential_False", novel_alleles[0]])
+                    print("/".join([known_alleles[0], extra_name1]), "99", sep=args.delimiter, file=results_file)
+                elif len(consensus_seqs) == 2:
+                    # two base alleles, one novel and one known (ex. NovelA/B)
+                    print("/".join([novel_name1, known_alleles[0]]), "1", sep=args.delimiter, file=results_file)
+            elif len(known_alleles) == 0:
+                # only possible if top geno is hom
+                if len(consensus_seqs) == 1:
+                    # one base allele, both same novel (ex. NovelA/NovelA)
+                    print("/".join([novel_name1, novel_name1]), "1", sep=args.delimiter, file=results_file)
+                elif len(consensus_seqs) == 2:
+                    # one base allele, two different novel alleles (ex. NovelA.a/NovelA.b)
+                    novel_name2 = "_".join(["Different_Novel_Similar", novel_alleles[0]])
+                    print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)
+        elif len(novel_alleles) == 2:
+            # only possible if top geno is het
+            if len(consensus_seqs) == 1:
+                # unexpected result: give arbitrary value of 99
+                extra_name1 = "_".join(["Potential_False_or_Novel", novel_alleles[0]])
+                extra_name2 = "_".join(["Potential_False_or_Novel", novel_alleles[1]])
+                print("/".join([extra_name1, extra_name2]), "99", sep=args.delimiter, file=results_file)
+            elif len(consensus_seqs) == 2:
+                # two base alleles, both novel (ex. NovelA/NovelB)
+                novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
                 novel_name2 = "_".join(["Novel_Similar", novel_alleles[1]])
-                if len(consensus_seqs) == 2:
-                    # two base alleles, both novel (ex. NovelA/NovelB)
-                    print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)                    
-        elif len(extra_alleles) == 2:
-            # unexpected result: give arbitrary value of 99
-            extra_name1 = "_".join(["Potential_False", extra_alleles[0]])
-            extra_name2 = "_".join(["Potential_False", extra_alleles[1]])
-            print("/".join([extra_name1, extra_name2]), "99", sep=args.delimiter, file=results_file)
-        elif len(known_alleles) == 1 and len(consensus_seqs) == 2: # & len(novel_alleles) == 0
+                print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)  
+        elif len(novel_alleles) == 0 and len(known_alleles) == 1 and len(consensus_seqs) == 2: 
             # only possible if top geno is hom
             # one base allele, one novel and one known (ex. NovelA/A)
             novel_name1 = "_".join(["Novel_Similar", known_alleles[0]])
             print("/".join([novel_name1, known_alleles[0]]), "1", sep=args.delimiter, file=results_file)
+        # elif len(known_alleles) == 1 and len(consensus_seqs) == 1: A/A printed below
+        # elif len(known_alleles) == 2: A/B printed below
+
         
-        
-        # )allele_edit_distances_stack = allele_edit_distances[top_genotype_split].stack()
+        # allele_edit_distances_stack = allele_edit_distances[top_genotype_split].stack()
         # reads_best_allele = allele_edit_distances_stack[allele_edit_distances_stack.eq(allele_edit_distances_stack.groupby(level=0).transform('min'))].reset_index(
 
         # top_genotype_subset_reads = {}
