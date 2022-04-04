@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 ### import libraries
+from this import d
 from Bio import AlignIO
 from collections import defaultdict
 
@@ -353,8 +354,8 @@ else:
         #             1 |           1 |          0  |   ex. NovelA/NovelA
         #             2 |           1 |          1  |   ex. NovelA/A
         #             2 |           1 |          0  |   ex. NovelA.a/NovelA.b
-        #             1 |           2 |          1  |   ex. ?
-        #             1 |           2 |          0  |   ex. ?
+        #             1 |           2 |          1  |   ex. A/PotentialFalseB
+        #             1 |           2 |          0  |   ex. PotentialFalseOrNovelA/PotentialFalseOrNovelB
         #             2 |           2 |          2  |   ex. A/B
         #             2 |           2 |          1  |   ex. NovelA/B
         #             2 |           2 |          0  |   ex. NovelA/NovelB
