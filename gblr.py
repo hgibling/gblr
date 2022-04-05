@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 
 ### import libraries
-from this import d
 from Bio import AlignIO
 from collections import defaultdict
 
