@@ -330,7 +330,7 @@ else:
         # dataframe[reads,genos: likelihoods]
         for g in genotype_names:
             split_alleles = g.split('/')
-            genotype_edit_distances[g] = np.logaddexp((allele_edit_distances[split_alleles[0]] * np.log(args.error_rate) - np.log(2)), (allele_edit_distances[split_alleles[1]] * np.log(args.error_rate) - np.log(2)))
+            genotype_edit_distances[g] = np.logaddexp((allele_edit_distances[split_alleles[0]] * np.log(1 - args.error_rate) - np.log(2)), (allele_edit_distances[split_alleles[1]] * np.log(1 - args.error_rate) - np.log(2)))
 
         ### get overall likelihood for each genotype
         # series[genos: likelihood]
