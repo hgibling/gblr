@@ -77,6 +77,17 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     # return values for subsetting
     return [left_chop, right_chop]
 
+# modify cigar sequence so indels only count as an edit distance of 1
+def modify_edit_distance(cigar):
+    split_cigar = re.findall('[0-9]*[A-Z=]', cigar)
+    edit_distance = 0
+    for chunk in split_cigar:
+        if chunk.endswith('X'):
+            edit_distance += int(chunk[:chunk.find('X')])
+        elif chunk.endswith(('D', 'I')):
+            edit_distance += 1
+    return(edit_distance)
+
 # get multiple sequence alignment with ABPOA
 def get_MSA(allele_reads_list, all_subset_reads):
     # define aligner parameters
@@ -216,7 +227,7 @@ if args.quick_count:
         for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
             ### check alignment to each allele
             for allele_name, allele_sequence in alleles.items():
-                result = edlib.align(strand_sequence, allele_sequence, mode = "HW", task = "path")
+                result = edlib.align(strand_sequence, allele_sequence, mode = "NW", task = "path")
 
                 ### ignore alignments that do not meet the minimum number of bases a read must align to in the variable region of interest
                 # check if alignment starts after the 3' minimum alignment threshold, or ends before the 5' minimum threshold
@@ -300,7 +311,7 @@ else:
             for allele_name, allele_sequence in alleles.items():
                 subset_alignment = edlib.align(read_subset, allele_sequence[args.flank_length : -args.flank_length], mode = "NW", task = "path")
                 region_of_interest_reads.add(read.query_name)
-                read_distance_dict[allele_name] = subset_alignment['editDistance']
+                read_distance_dict[allele_name] = modify_edit_distance(subset_alignment['cigar'])
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
