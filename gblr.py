@@ -356,6 +356,15 @@ else:
         print("Number of consensus sequences is %d" % (len(consensus_seqs)), file=sys.stderr)
         if len(consensus_seqs) != len(top_genotype_split):
             print("Top genotype zygosity does not match consensus sequence(s)", file=sys.stderr)
+        if args.consensus_sequence:
+            # print fasta for consensus sequence(s)
+            consensus_file = open(args.output_name + ".consensus.fa", "a")
+            print(">consensus sequence", file=consensus_file)
+            print(consensus_seqs[0], file=consensus_file)
+            if len(consensus_seqs > 1):
+                print(">second consensus sequence", file=consensus_file)
+                print(consensus_seqs[1], file=consensus_file)
+            consensus_file.close
 
         # 9 possible outcomes:
         # Num cons seqs | Num alleles | Num matches |
