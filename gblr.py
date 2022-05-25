@@ -157,6 +157,8 @@ parser.add_argument('-l', '--flank-length', type=int, default=10000, help='lengt
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
 parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estimate of the sequencing error rate')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
+parser.add_argument('-s', '--scoring-model', type=str, help='scoring model to use ("e" or "1e")')
+parser.add_argument('-E', '--ED-model', type=str, help='edit distance model to use ("allIndel" or "1Indel")')
 parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
 parser.add_argument('-V', '--verbose-reads', action='store_true', help='print list of reads that best align to each allele in top genotype')
@@ -311,7 +313,10 @@ else:
             for allele_name, allele_sequence in alleles.items():
                 subset_alignment = edlib.align(read_subset, allele_sequence[args.flank_length : -args.flank_length], mode = "NW", task = "path")
                 region_of_interest_reads.add(read.query_name)
-                read_distance_dict[allele_name] = modify_edit_distance(subset_alignment['cigar'])
+                if (args.ED_model == "1Indel"):
+                    read_distance_dict[allele_name] = modify_edit_distance(subset_alignment['cigar'])
+                elif (args.ED_model == "allIndel"):
+                    read_distance_dict[allele_name] = subset_alignment['editDistance']
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
@@ -339,9 +344,13 @@ else:
 
         ### get genotype likelihoods
         # dataframe[reads,genos: likelihoods]
+        if args.scoring_model == "e":
+            error_modifier = args.error_rate
+        elif args.scoring_model == "1e":
+            error_modifier = 1 - args.error_rate
         for g in genotype_names:
             split_alleles = g.split('/')
-            genotype_edit_distances[g] = np.logaddexp((allele_edit_distances[split_alleles[0]] * np.log(1 - args.error_rate) - np.log(2)), (allele_edit_distances[split_alleles[1]] * np.log(1 - args.error_rate) - np.log(2)))
+            genotype_edit_distances[g] = np.logaddexp((allele_edit_distances[split_alleles[0]] * np.log(error_modifier) - np.log(2)), (allele_edit_distances[split_alleles[1]] * np.log(error_modifier) - np.log(2)))
 
         ### get overall likelihood for each genotype
         # series[genos: likelihood]
