@@ -157,7 +157,7 @@ parser.add_argument('-l', '--flank-length', type=int, default=10000, help='lengt
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
 parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estimate of the sequencing error rate')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
-parser.add_argument('-s', '--scoring-model', type=str, help='scoring model to use ("e" or "1e")')
+parser.add_argument('-s', '--scoring-model', type=str, help='scoring model to use ("e" or "1ee")')
 parser.add_argument('-E', '--ED-model', type=str, help='edit distance model to use ("allIndel" or "1Indel")')
 parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
@@ -338,6 +338,11 @@ else:
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
 
+        ### get read subset lengths and add to edit distance dict
+        all_subset_reads_dict = pd.DataFrame.from_dict(all_subset_reads, orient='index', columns=['ReadLength'])
+        all_subset_reads_dict.ReadLength = all_subset_reads_dict.ReadLength.str.len()
+        allele_edit_distances['ReadLength'] = all_subset_reads_dict
+
         ### get all possible genotypes
         genotype_names = get_genotype_names(allele_names)
         genotype_edit_distances = pd.DataFrame(index=allele_edit_distances.index, columns=genotype_names)
@@ -345,12 +350,13 @@ else:
         ### get genotype likelihoods
         # dataframe[reads,genos: likelihoods]
         if args.scoring_model == "e":
-            error_modifier = args.error_rate
-        elif args.scoring_model == "1e":
-            error_modifier = 1 - args.error_rate
-        for g in genotype_names:
-            split_alleles = g.split('/')
-            genotype_edit_distances[g] = np.logaddexp((allele_edit_distances[split_alleles[0]] * np.log(error_modifier) - np.log(2)), (allele_edit_distances[split_alleles[1]] * np.log(error_modifier) - np.log(2)))
+            for g in genotype_names:
+                split_alleles = g.split('/')
+                genotype_edit_distances[g] = np.logaddexp(((allele_edit_distances[split_alleles[0]] * np.log(args.error_rate)) - np.log(2)), ((allele_edit_distances[split_alleles[1]] * np.log(args.error_rate)) - np.log(2)))
+        elif args.scoring_model == "1ee":
+            for g in genotype_names:
+                split_alleles = g.split('/')
+                genotype_edit_distances[g] = np.logaddexp((((allele_edit_distances['ReadLength'] - allele_edit_distances[split_alleles[0]]) * np.log(1 - args.error_rate)) + (allele_edit_distances[split_alleles[0]] + np.log(args.error_rate)) - np.log(2)), (((allele_edit_distances['ReadLength'] - allele_edit_distances[split_alleles[1]]) * np.log(1 - args.error_rate)) + (allele_edit_distances[split_alleles[1]] + np.log(args.error_rate)) - np.log(2)))
 
         ### get overall likelihood for each genotype
         # series[genos: likelihood]
@@ -370,7 +376,7 @@ else:
             consensus_file = open(args.output_name + ".consensus.fa", "a")
             print(">consensus sequence", file=consensus_file)
             print(consensus_seqs[0], file=consensus_file)
-            if len(consensus_seqs > 1):
+            if len(consensus_seqs) > 1:
                 print(">second consensus sequence", file=consensus_file)
                 print(consensus_seqs[1], file=consensus_file)
             consensus_file.close
