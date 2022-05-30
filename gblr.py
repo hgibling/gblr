@@ -77,6 +77,14 @@ def subset_positions(read_cigar, ref_start, ref_end, region_start, region_end):
     # return values for subsetting
     return [left_chop, right_chop]
 
+# get alignment length
+def get_alignment_length(cigar):
+    alignment_length = 0
+    split_cigar = re.findall('[0-9]*[A-Z=]', cigar)
+    for chunk in split_cigar:
+        alignment_length += int(chunk[:chunk.find('DIMX=')])
+    return(alignment_length)
+
 # modify cigar sequence so indels only count as an edit distance of 1
 def modify_edit_distance(cigar):
     split_cigar = re.findall('[0-9]*[A-Z=]', cigar)
@@ -281,6 +289,8 @@ if args.quick_count:
 
 ### for generating scores:
 else:
+    if args.scoring_model == "1ee":
+        all_alignment_lengths = {}
     all_edit_distances = {}
     all_subset_reads = {}
     region = re.split("[:,-]", args.region)
@@ -300,6 +310,8 @@ else:
         ### filter reads to consider only those that touch both flanks
         if read.reference_start < (region[1] - args.flank_tolerance) and read.reference_end > (region[2] + args.flank_tolerance):
             read_distance_dict = dict.fromkeys(allele_names)
+            if args.scoring_model == "1ee":
+                read_alignment_length_dict = dict.fromkeys(allele_names)
                 
             ### subset read to just the region of interest
             chop_sites = subset_positions(read.cigarstring, read.reference_start, read.reference_end, region[1], region[2])
@@ -317,9 +329,15 @@ else:
                     read_distance_dict[allele_name] = modify_edit_distance(subset_alignment['cigar'])
                 elif (args.ED_model == "allIndel"):
                     read_distance_dict[allele_name] = subset_alignment['editDistance']
+                if args.scoring_model == "1ee":
+                    read_alignment_length_dict[allele_name] = get_alignment_length(subset_alignment['cigar'])
+                    #print("cigar is: %s, alignment length is: %d\n" % (subset_alignment['cigar'], get_alignment_length(subset_alignment['cigar'])), file=sys.stderr)
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
+            if args.scoring_model == "1ee":
+                all_alignment_lengths[read.query_name] = read_alignment_length_dict
+                #print(all_alignment_lengths.to_string(), file=sys.stderr)
     
     ### print number of reads used for analysis
     print("Number of reads that fully span region of interest: %d" % (len(region_of_interest_reads)), file=sys.stderr)
@@ -338,25 +356,34 @@ else:
     ### get genotype edit distances if doing diploid calling
     if args.diploid:
 
-        ### get read subset lengths and add to edit distance dict
-        all_subset_reads_dict = pd.DataFrame.from_dict(all_subset_reads, orient='index', columns=['ReadLength'])
-        all_subset_reads_dict.ReadLength = all_subset_reads_dict.ReadLength.str.len()
-        allele_edit_distances['ReadLength'] = all_subset_reads_dict
-
         ### get all possible genotypes
         genotype_names = get_genotype_names(allele_names)
         genotype_edit_distances = pd.DataFrame(index=allele_edit_distances.index, columns=genotype_names)
 
         ### get genotype likelihoods
         # dataframe[reads,genos: likelihoods]
+        log_error = np.log(args.error_rate)
+        log_1_minus_error = np.log(1 - args.error_rate)
+        log_2 = np.log(2)
         if args.scoring_model == "e":
             for g in genotype_names:
                 split_alleles = g.split('/')
-                genotype_edit_distances[g] = np.logaddexp(((allele_edit_distances[split_alleles[0]] * np.log(args.error_rate)) - np.log(2)), ((allele_edit_distances[split_alleles[1]] * np.log(args.error_rate)) - np.log(2)))
+                ED_1 = allele_edit_distances[split_alleles[0]]
+                ED_2 = allele_edit_distances[split_alleles[1]]
+                haplotype_1 = (ED_1 * log_error) - log_2
+                haplotype_2 = (ED_2 * log_error) - log_2
+                genotype_edit_distances[g] = np.logaddexp(haplotype_1, haplotype_2)
         elif args.scoring_model == "1ee":
+            alignment_lengths = pd.DataFrame.from_dict(all_alignment_lengths, orient='index')
             for g in genotype_names:
                 split_alleles = g.split('/')
-                genotype_edit_distances[g] = np.logaddexp((((allele_edit_distances['ReadLength'] - allele_edit_distances[split_alleles[0]]) * np.log(1 - args.error_rate)) + (allele_edit_distances[split_alleles[0]] + np.log(args.error_rate)) - np.log(2)), (((allele_edit_distances['ReadLength'] - allele_edit_distances[split_alleles[1]]) * np.log(1 - args.error_rate)) + (allele_edit_distances[split_alleles[1]] + np.log(args.error_rate)) - np.log(2)))
+                alignment_length_1 = alignment_lengths[split_alleles[0]]
+                alignment_length_2 = alignment_lengths[split_alleles[1]]
+                ED_1 = allele_edit_distances[split_alleles[0]]
+                ED_2 = allele_edit_distances[split_alleles[1]] 
+                haplotype_1 = ((alignment_length_1 - ED_1) * log_1_minus_error) + (ED_1 * log_error) - log_2
+                haplotype_2 = ((alignment_length_2 - ED_2) * log_1_minus_error) + (ED_2 * log_error) - log_2
+                genotype_edit_distances[g] = np.logaddexp(haplotype_1, haplotype_2)
 
         ### get overall likelihood for each genotype
         # series[genos: likelihood]
