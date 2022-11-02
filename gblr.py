@@ -186,7 +186,7 @@ results_file = open(args.output_name, "w")
 
 ### analyze
 ### for generating scores:
-if args.quick_count:
+if args.quick_count == False:
     if args.scoring_model == "1ee":
         all_alignment_lengths = {}
     all_edit_distances = {}
