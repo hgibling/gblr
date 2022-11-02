@@ -109,7 +109,7 @@ def get_MSA(allele_reads_list, all_subset_reads):
     return({'MSA':reads_MSA.msa_seq, 'consensus':reads_MSA.cons_seq})
 
 # get consensus alignment with ABPOA
-def get_abpoa_consensus(all_reads):
+def get_consensus(all_reads):
     # define aligner parameters
     aligner = pa.msa_aligner()
     # align all reads
@@ -117,44 +117,7 @@ def get_abpoa_consensus(all_reads):
     # return list of seqs in MSA format, as well as consensus sequence
     # list[consensusseq]
     return(reads_consensus.cons_seq)
-    
-# all IUPAC ambiguous nucleotides
-IUPAC_ambiguous_to_nucleotides = {'R':'AG', 'Y':'CT', 'S':'CG', 'W':'AT', 'K':'GT', 'M':'AC', 'B':'CGT', 'D':'AGT', 'H':'ACT', 'V':'ACG', 'N':'ACGT'}
 
-# get consensus sequence (code modified from: https://stackoverflow.com/questions/38586800/python-multiple-consensus-sequences)
-def get_consensus(reads_MSA, threshold = 0.35, ambiguous = IUPAC_ambiguous_to_nucleotides):
-    IUPAC_nucs_to_ambiguous = dict((nuc, amb) for amb, nuc in ambiguous.items())
-
-    # alignment_length = reads_MSA.get_alignment_length()
-    alignment_length = len(reads_MSA[1])
-    profile = pd.DataFrame({'A': [0]*alignment_length, 'C': [0]*alignment_length, 'G': [0]*alignment_length, 'T': [0]*alignment_length, '-': [0]*alignment_length})
-
-    # count nucleotide occurances at each location
-    # for record in reads_MSA:
-    #     for i, nuc in enumerate(record.seq.upper()):
-    #         profile[nuc][i] += 1
-    for seq in reads_MSA:
-        for i, nuc in enumerate(seq):
-            profile[nuc][i] += 1
-    profile = profile.transpose()
-    
-    # determine consensus sequence
-    consensus = ""
-    for i in range(alignment_length):
-        # get all nucleotides that have a frequency of at least defined threshold
-        max_nuc = "".join(list(profile[profile[i] > (profile[i].sum()*threshold)].index))
-        if len(max_nuc) > 1:
-            if '-' in max_nuc:
-                max_nuc = max_nuc.replace("-", "")
-                if len(max_nuc) == 1:
-                    # use lowercase letters to notate positions where a gap occurs ~as frequently as the letter
-                    max_nuc = max_nuc.lower()
-                else: 
-                    max_nuc = IUPAC_nucs_to_ambiguous[max_nuc].lower()
-            else:
-                max_nuc = IUPAC_nucs_to_ambiguous[max_nuc]
-        consensus += max_nuc
-    return(consensus.replace("-", ""))
 
 ### parse arguments
 parser = argparse.ArgumentParser()
@@ -171,7 +134,6 @@ parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='prin
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
 parser.add_argument('-V', '--verbose-reads', action='store_true', help='print list of reads that best align to each allele in top genotype')
 parser.add_argument('-c', '--consensus_sequence', action='store_true', help='print consensus sequences to output-name.consensus.fa')
-# parser.add_argument('-C', '--consensus_alignment', action='store_true', help='print alignment of read consensus sequence and alleles from top genotype to stderr') # TODO
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
 parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
@@ -221,74 +183,10 @@ for name, sequence in alleles.items():
 ### set up output file
 results_file = open(args.output_name, "w")
 
-### for generating quick counts
-if args.quick_count:
-    quality_reads = set()
-    flank_reads = set()
-    bad_reads = set()
-    allele_counts = defaultdict(int)
 
-    ### align each read against all alleles
-    for read in reads:
-        best_distance = args.max_mismatch * len(read.sequence)
-        best_allele = []
-        
-        ### check alignment for forward and reverse reads
-        for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
-            ### check alignment to each allele
-            for allele_name, allele_sequence in alleles.items():
-                result = edlib.align(strand_sequence, allele_sequence, mode = "NW", task = "path")
-
-                ### ignore alignments that do not meet the minimum number of bases a read must align to in the variable region of interest
-                # check if alignment starts after the 3' minimum alignment threshold, or ends before the 5' minimum threshold
-                if ((result['locations'][0][0] > (all_allele_lengths[allele_name] - args.flank_length - args.alignment_tolerance)) or (result['locations'][0][1] < (args.flank_length + args.alignment_tolerance))):
-                    flank_reads.add(read.name)
-                    continue
-
-                ### consider alignments that meet the maximum edit distance threshold
-                # update variables if edit distance is under acceptable threshold or is improved from a previous acceptable alignment
-                if result['editDistance'] < best_distance:
-                    best_allele = [allele_name]
-                    best_distance = result['editDistance']
-                    quality_reads.add(read.name)
-                # add to list of best alleles if edit distance is the same as a previously determined acceptable alignment
-                elif result['editDistance'] == best_distance:
-                    best_allele.append(allele_name)
-                    quality_reads.add(read.name) 
-
-        ### get metrics for read classes
-        # if alignment to one allele was quality but to the flank sequences in another allele, only consider quality alignment 
-        if read.name in flank_reads and quality_reads:
-            flank_reads.remove(read.name)
-        # if read didn't align to any part of the allele sequence under the edit distance threshold, consider it low quality
-        if (read.name not in flank_reads) and (read.name not in quality_reads):
-            bad_reads.add(read.name)
-
-        ### consider only reads with acceptable edit distances to an allele and add count to best allele(s)
-        # single best allele
-        if len(best_allele) ==  1:
-            edit_distances.append(best_distance)
-            allele_counts[best_allele[0]] += 1    
-                
-        # two or more equally best alleles
-        elif len(best_allele) > 1:
-            edit_distances.append(best_distance)
-            # iterate through all best alleles and count proportions
-            for i, allele in enumerate(best_allele):
-                allele_counts[best_allele[i]] += 1/len(best_allele)
-        
-        else:
-            exit("ERROR: no reads aligned to region of interest")
-
-    ### print results (allele, count, proportion)
-    for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
-        print(allele, count, count/len(quality_reads), sep=args.delimiter, file=results_file)
-        N_geno += 1
-        if args.print_top_N_genos > 0 and N_geno == args.print_top_N_genos:
-            break
-
+### analyze
 ### for generating scores:
-else:
+if args.quick_count:
     if args.scoring_model == "1ee":
         all_alignment_lengths = {}
     all_edit_distances = {}
@@ -391,7 +289,7 @@ else:
         top_genotype_split = list(set(all_scores.index[0].split('/')))
 
         ### get abpoa consensus
-        consensus_seqs = get_abpoa_consensus(all_subset_reads)
+        consensus_seqs = get_consensus(all_subset_reads)
 
         ### print stats
         print("Top genotype is %s" % (all_scores.index[0]), file=sys.stderr)
@@ -490,4 +388,72 @@ else:
         if (args.print_top_N_genos > 0) and (N_geno == args.print_top_N_genos):
             break
 
+
+### for generating quick counts
+else:
+    quality_reads = set()
+    flank_reads = set()
+    bad_reads = set()
+    allele_counts = defaultdict(int)
+
+    ### align each read against all alleles
+    for read in reads:
+        best_distance = args.max_mismatch * len(read.sequence)
+        best_allele = []
+        
+        ### check alignment for forward and reverse reads
+        for strand_idx, strand_sequence in enumerate([read.sequence, reverse_complement(read.sequence)]):
+            ### check alignment to each allele
+            for allele_name, allele_sequence in alleles.items():
+                result = edlib.align(strand_sequence, allele_sequence, mode = "NW", task = "path")
+
+                ### ignore alignments that do not meet the minimum number of bases a read must align to in the variable region of interest
+                # check if alignment starts after the 3' minimum alignment threshold, or ends before the 5' minimum threshold
+                if ((result['locations'][0][0] > (all_allele_lengths[allele_name] - args.flank_length - args.alignment_tolerance)) or (result['locations'][0][1] < (args.flank_length + args.alignment_tolerance))):
+                    flank_reads.add(read.name)
+                    continue
+
+                ### consider alignments that meet the maximum edit distance threshold
+                # update variables if edit distance is under acceptable threshold or is improved from a previous acceptable alignment
+                if result['editDistance'] < best_distance:
+                    best_allele = [allele_name]
+                    best_distance = result['editDistance']
+                    quality_reads.add(read.name)
+                # add to list of best alleles if edit distance is the same as a previously determined acceptable alignment
+                elif result['editDistance'] == best_distance:
+                    best_allele.append(allele_name)
+                    quality_reads.add(read.name) 
+
+        ### get metrics for read classes
+        # if alignment to one allele was quality but to the flank sequences in another allele, only consider quality alignment 
+        if read.name in flank_reads and quality_reads:
+            flank_reads.remove(read.name)
+        # if read didn't align to any part of the allele sequence under the edit distance threshold, consider it low quality
+        if (read.name not in flank_reads) and (read.name not in quality_reads):
+            bad_reads.add(read.name)
+
+        ### consider only reads with acceptable edit distances to an allele and add count to best allele(s)
+        # single best allele
+        if len(best_allele) ==  1:
+            edit_distances.append(best_distance)
+            allele_counts[best_allele[0]] += 1    
+                
+        # two or more equally best alleles
+        elif len(best_allele) > 1:
+            edit_distances.append(best_distance)
+            # iterate through all best alleles and count proportions
+            for i, allele in enumerate(best_allele):
+                allele_counts[best_allele[i]] += 1/len(best_allele)
+        
+        else:
+            exit("ERROR: no reads aligned to region of interest")
+
+    ### print results (allele, count, proportion)
+    for allele, count in sorted(allele_counts.items(), key=lambda x: x[1], reverse=True):
+        print(allele, count, count/len(quality_reads), sep=args.delimiter, file=results_file)
+        N_geno += 1
+        if args.print_top_N_genos > 0 and N_geno == args.print_top_N_genos:
+            break
+
+### finish saving to file
 results_file.close
