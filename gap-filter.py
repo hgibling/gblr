@@ -69,14 +69,14 @@ def toss_indels(gap_positions_dict, read_number_threshold, length_multiple, leng
 ### parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('-b', '--bam', type=str, required=True, help='bam file of aligned sequencing reads')
-parser.add_argument('-r', '--region', type=str, default='chr5:23526673,23527764', help='position of one region of interest (ex: chr1:100000-200000)')
-parser.add_argument('-f', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions outside the region of interest')
-parser.add_argument('-g', '--gap-tolerance', type=int, default=10, help='ignore gaps this size or smaller')
-parser.add_argument('-R', '--read-threshold', type=float, default=0.25, help='proportion of reads that must have a specific deletion in order to consider the deletion at that position ok')
+parser.add_argument('-r', '--region', type=str, default='chr5:23526673,23527764', help='position of one region of interest (ex: chr1:100000-200000)(default: chr5:23526673,23527764 (PRDM9 zinc finger array GRCh38))'))
+parser.add_argument('-f', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions outside the region of interest (default: 50)')
+parser.add_argument('-g', '--gap-tolerance', type=int, default=10, help='ignore gaps this size or smaller (default: 10)')
+parser.add_argument('-R', '--read-threshold', type=float, default=0.25, help='proportion of reads that must have a specific deletion in order to consider the deletion at that position ok (default: 0.25)')
 parser.add_argument('-l', '--length-multiple', type=int, default=0, help='toss reads with gaps that do not correspond to expected repeat length X or multiple thereof (default: ignore flag)')
 parser.add_argument('-L', '--length-tolerance', type=int, default=0, help='allow for length multiple to be within X bases (default: 0)')
 parser.add_argument('-v', '--verbose', action='store_true', help='print stats about reads to stderr')
-parser.add_argument('-o', '--output-name', type=str, default='', help='name of output file of reads to keep (default: BAMNAME-keep-reads.txt)')
+parser.add_argument('-o', '--output-name', type=str, default='', help='name of output file of reads to keep (default: $BAMNAME.keep-reads.txt)')
 args = parser.parse_args()
 
 ### check arguments
