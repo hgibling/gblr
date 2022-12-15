@@ -128,7 +128,7 @@ parser.add_argument('-l', '--flank-length', type=int, default=10000, help='lengt
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
 parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estimate of the sequencing error rate')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
-parser.add_argument('-x', '--temp-model', type=str, help='temp model to use ("alignment", "consensus", or "combined")')
+parser.add_argument('-M', '--model', type=str, help='overall model to use ("alignment", "consensus", or "combined")')
 parser.add_argument('-s', '--scoring-model', type=str, help='scoring model to use ("e" or "1ee")')
 parser.add_argument('-E', '--ED-model', type=str, help='edit distance model to use ("allIndel" or "1Indel")')
 parser.add_argument('-m', '--min-frequency', type=str, default=0.25, help='minimum frequency to call a consensus sequence (between 0 and 1; default: 0.25)')
@@ -141,7 +141,7 @@ parser.add_argument('-o', '--output-name', type=str, required=True, help='name o
 
 # specific to quick count
 parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
-parser.add_argument('-M', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
+parser.add_argument('-x', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
 parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
 
 args = parser.parse_args()
@@ -299,7 +299,7 @@ if args.quick_count == False:
         top_genotype_split = list(set(all_scores.index[0].split('/')))
 
         # alignment only
-        if args.temp_model == "alignment":
+        if args.model == "alignment":
             ### print results (allele or genotype name, score)
             for name, score in all_scores.items():
                 print(name, score, sep=args.delimiter, file=results_file)
@@ -314,7 +314,7 @@ if args.quick_count == False:
 
             ### print stats
             print("Number of consensus sequences is %d" % (len(consensus_seqs)), file=sys.stderr)
-            if args.temp_model == "combined":
+            if args.model == "combined":
                 print("Top genotype is %s" % (all_scores.index[0]), file=sys.stderr)
                 if len(consensus_seqs) != len(top_genotype_split):
                     print("Top genotype zygosity does not match consensus sequence(s)", file=sys.stderr)
@@ -331,7 +331,7 @@ if args.quick_count == False:
                 consensus_file.close
 
             # consensus only
-            if args.temp_model == "consensus":
+            if args.model == "consensus":
 
                 # 5 possible outcomes:
                 # Num cons seqs | Num matches |
