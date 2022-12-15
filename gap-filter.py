@@ -155,7 +155,7 @@ if args.output_name != "":
 else:
     keep_reads_name = ".".join([bam_name, "keep-reads.txt"])
 
-### write keep read list to file
+### write list of reads to keep to file
 file = open(keep_reads_name, "w")
 for read in keep_reads:
     file.write("%s\n" % read)
