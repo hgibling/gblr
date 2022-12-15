@@ -109,11 +109,11 @@ def get_MSA(allele_reads_list, all_subset_reads):
     return({'MSA':reads_MSA.msa_seq, 'consensus':reads_MSA.cons_seq})
 
 # get consensus alignment with ABPOA
-def get_consensus(all_reads):
+def get_consensus(all_reads, min_freq):
     # define aligner parameters
     aligner = pa.msa_aligner()
     # align all reads
-    reads_consensus = aligner.msa(list(all_subset_reads.values()), out_cons=True, out_msa=False, max_n_cons=2, min_freq=0.35)
+    reads_consensus = aligner.msa(list(all_subset_reads.values()), out_cons=True, out_msa=False, max_n_cons=2, min_freq=min_freq)
     # return list of seqs in MSA format, as well as consensus sequence
     # list[consensusseq]
     return(reads_consensus.cons_seq)
@@ -128,17 +128,22 @@ parser.add_argument('-l', '--flank-length', type=int, default=10000, help='lengt
 parser.add_argument('-t', '--flank-tolerance', type=int, default=50, help='minimum number of bases to which a read must align in the flanking regions')
 parser.add_argument('-e', '--error-rate', type=float, default=0.01, help='estimate of the sequencing error rate')
 parser.add_argument('-d', '--diploid', action='store_true', help='get diploid genotype scores instead of haploid (cannot be used with --quick-count)')
+parser.add_argument('-x', '--temp-model', type=str, help='temp model to use ("alignment", "consensus", or "combined")')
 parser.add_argument('-s', '--scoring-model', type=str, help='scoring model to use ("e" or "1ee")')
 parser.add_argument('-E', '--ED-model', type=str, help='edit distance model to use ("allIndel" or "1Indel")')
+parser.add_argument('-m', '--min-frequency', type=str, default=0.25, help='minimum frequency to call a consensus sequence (between 0 and 1; default: 0.25)')
 parser.add_argument('-N', '--print-top-N-genos', type=int, default=0, help='print likelihoods of only the top N genotypes (default: print all')
 parser.add_argument('-v', '--verbose', action='store_true', help='print table of edit distances to stderr')
 parser.add_argument('-V', '--verbose-reads', action='store_true', help='print list of reads that best align to each allele in top genotype')
-parser.add_argument('-c', '--consensus_sequence', action='store_true', help='print consensus sequences to output-name.consensus.fa')
-parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
-parser.add_argument('-m', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
-parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
+parser.add_argument('-c', '--consensus-sequence', action='store_true', help='print consensus sequences to output-name.consensus.fa')
 parser.add_argument('-D', '--delimiter', type=str, default='\t', help='delimiter to use for results output')
 parser.add_argument('-o', '--output-name', type=str, required=True, help='name of file to save scores/calls')
+
+# specific to quick count
+parser.add_argument('-q', '--quick-count', action='store_true', help='get counts of reads that align best to alleles instead of scores')
+parser.add_argument('-M', '--max-mismatch', type=float, default=0.05, help='for quick count: maximum proportion of a read that can be mismatched/indels relative to an allele')
+parser.add_argument('-T', '--alignment-tolerance', type=int, default=50, help='for quick count: minimum number of bases to which a read must align in the variable region of interest')
+
 args = parser.parse_args()
 
 ### check arguments
@@ -147,6 +152,9 @@ if args.flank_length < args.flank_tolerance:
 
 if args.max_mismatch < 0 or args.max_mismatch > 1:
     exit("ERROR: max-mistmatch argument must be a proportion (between 0 and 1). Check parameters.")
+
+if args.min_frequency < 0 or args.min_frequency > 1:
+    exit("ERROR: min-frequency argument must be a proportion (between 0 and 1). Check parameters.")
 
 if args.diploid and args.quick_count:
     exit("ERROR: diploid calling cannot be done with the quick-count methid (haploid only). Check parameters.")
@@ -229,13 +237,11 @@ if args.quick_count == False:
                     read_distance_dict[allele_name] = subset_alignment['editDistance']
                 if args.scoring_model == "1ee":
                     read_alignment_length_dict[allele_name] = get_alignment_length(subset_alignment['cigar'])
-                    #print("cigar is: %s, alignment length is: %d\n" % (subset_alignment['cigar'], get_alignment_length(subset_alignment['cigar'])), file=sys.stderr)
             
             ### store read edit distances for each allele
             all_edit_distances[read.query_name] = read_distance_dict
             if args.scoring_model == "1ee":
                 all_alignment_lengths[read.query_name] = read_alignment_length_dict
-                #print(all_alignment_lengths.to_string(), file=sys.stderr)
     
     ### print number of reads used for analysis
     print("Number of reads that fully span region of interest: %d" % (len(region_of_interest_reads)), file=sys.stderr)
@@ -251,9 +257,13 @@ if args.quick_count == False:
         ### remove sum row for further analysis
         allele_edit_distances = allele_edit_distances[:-1]
 
-    ### get genotype edit distances if doing diploid calling
-    if args.diploid:
+    ### haploid calling
+    if args.diploid == False:
+        all_scores = allele_edit_distances.sum().sort_values()
+        # TODO: check for novel alleles
 
+    ### diploid calling
+    else:
         ### get all possible genotypes
         genotype_names = get_genotype_names(allele_names)
         genotype_edit_distances = pd.DataFrame(index=allele_edit_distances.index, columns=genotype_names)
@@ -283,110 +293,214 @@ if args.quick_count == False:
                 haplotype_2 = ((alignment_length_2 - ED_2) * log_1_minus_error) + (ED_2 * log_error) - log_2
                 genotype_edit_distances[g] = np.logaddexp(haplotype_1, haplotype_2)
 
-        ### get overall likelihood for each genotype
+        ### get overall likelihood for each genotype (considering all reads)
         # series[genos: likelihood]
         all_scores = genotype_edit_distances.sum().sort_values(ascending=False)
         top_genotype_split = list(set(all_scores.index[0].split('/')))
 
-        ### get abpoa consensus
-        consensus_seqs = get_consensus(all_subset_reads)
+        # alignment only
+        if args.temp_model == "alignment":
+            ### print results (allele or genotype name, score)
+            for name, score in all_scores.items():
+                print(name, score, sep=args.delimiter, file=results_file)
+                N_geno += 1
+                if (args.print_top_N_genos > 0) and (N_geno == args.print_top_N_genos):
+                    break
 
-        ### print stats
-        print("Top genotype is %s" % (all_scores.index[0]), file=sys.stderr)
-        print("Number of consensus sequences is %d" % (len(consensus_seqs)), file=sys.stderr)
-        if len(consensus_seqs) != len(top_genotype_split):
-            print("Top genotype zygosity does not match consensus sequence(s)", file=sys.stderr)
-        if args.consensus_sequence:
-            # print fasta for consensus sequence(s)
-            consensus_file = open(args.output_name + ".consensus.fa", "a")
-            print(">consensus sequence", file=consensus_file)
-            print(consensus_seqs[0], file=consensus_file)
-            if len(consensus_seqs) > 1:
-                print(">second consensus sequence", file=consensus_file)
-                print(consensus_seqs[1], file=consensus_file)
-            consensus_file.close
+        # consensus or combined
+        else:
+            ### get abpoa consensus
+            consensus_seqs = get_consensus(all_subset_reads, args.min_frequency)
 
-        # 9 possible outcomes:
-        # Num cons seqs | Num alleles | Num matches |
-        # --------------|-------------|-------------|
-        #             1 |           1 |          1  |   ex. A/A
-        #             1 |           1 |          0  |   ex. NovelA/NovelA
-        #             2 |           1 |          1  |   ex. NovelA/A
-        #             2 |           1 |          0  |   ex. NovelA.a/NovelA.b
-        #             1 |           2 |          1  |   ex. A/PotentialFalseB
-        #             1 |           2 |          0  |   ex. PotentialFalseOrNovelA/PotentialFalseOrNovelB
-        #             2 |           2 |          2  |   ex. A/B
-        #             2 |           2 |          1  |   ex. NovelA/B
-        #             2 |           2 |          0  |   ex. NovelA/NovelB
+            ### print stats
+            print("Number of consensus sequences is %d" % (len(consensus_seqs)), file=sys.stderr)
+            if args.temp_model == "combined":
+                print("Top genotype is %s" % (all_scores.index[0]), file=sys.stderr)
+                if len(consensus_seqs) != len(top_genotype_split):
+                    print("Top genotype zygosity does not match consensus sequence(s)", file=sys.stderr)
 
-        novel_alleles = []
-        known_alleles = []
+            ### print consensus sequences
+            if args.consensus_sequence:
+                # print fasta for consensus sequence(s)
+                consensus_file = open(args.output_name + ".consensus.fa", "a")
+                print(">consensus sequence", file=consensus_file)
+                print(consensus_seqs[0], file=consensus_file)
+                if len(consensus_seqs) > 1:
+                    print(">second consensus sequence", file=consensus_file)
+                    print(consensus_seqs[1], file=consensus_file)
+                consensus_file.close
 
-        for allele in top_genotype_split:
-            allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
-            # check for novel haplotypes
-            if consensus_seqs[0] == allele_subsequence:
-                known_alleles.append(allele)
-            elif len(consensus_seqs) == 2:
-                if consensus_seqs[1] == allele_subsequence:
-                    known_alleles.append(allele)
+            # consensus only
+            if args.temp_model == "consensus":
+
+                # 5 possible outcomes:
+                # Num cons seqs | Num matches |
+                # --------------|-------------|
+                #             1 |           1 |   ex. A/A
+                #             1 |           0 |   ex. NovelA/NovelA
+                #             2 |           2 |   ex. A/B
+                #             2 |           1 |   ex. NovelA/B
+                #             2 |           0 |   ex. NovelA/NovelB
+
+                novel_alleles = []
+                known_alleles = []
+                consensus_matches = []
+
+                # check for known haplotypes
+                for allele_name, allele_sequence in alleles.items():
+                    allele_sequence_subset = allele_sequence[args.flank_length : -args.flank_length]
+                    if consensus_seqs[0] == allele_sequence_subset:
+                        known_alleles.append(allele_name)
+                        consensus_matches.append(0)
+                    if len(consensus_seqs) == 2:
+                        if consensus_seqs[1] == allele_sequence_subset:
+                            known_alleles.append(allele_name)
+                            consensus_matches.append(1)
+
+                # check for novel haplotypes if no known matches
+                if len(consensus_seqs) != len(known_alleles):
+                    if len(consensus_matches) == 0:
+                        print("No consensus matches", file=sys.stderr)
+                        # no matches, so start with first consensus seq
+                        best_distance = len(consensus_seqs[0])
+                        best_allele = ""
+                        for allele_name, allele_sequence in alleles.items():
+                            allele_sequence_subset = allele_sequence[args.flank_length : -args.flank_length]
+                            consensus_alignment = edlib.align(consensus_seqs[0], allele_sequence_subset, mode = "NW", task = "path")
+                            if consensus_alignment['editDistance'] < best_distance:
+                                best_allele = allele_name
+                                best_distance = consensus_alignment['editDistance']
+                        novel_alleles.append(best_allele)
+                        if len(consensus_seqs) == 2:
+                            print("Two consensus seqs unmatched", file=sys.stderr)
+                            best_distance2 = len(consensus_seqs[1])
+                            best_allele2 = ""
+                            # find match for other consensus seq if present
+                            for allele_name2, allele_sequence2 in alleles.items():
+                                allele_sequence_subset2 = allele_sequence2[args.flank_length : -args.flank_length]
+                                consensus_alignment2 = edlib.align(consensus_seqs[1], allele_sequence_subset2, mode = "NW", task = "path")
+                                if consensus_alignment2['editDistance'] < best_distance2:
+                                    best_allele2 = allele_name2
+                                    best_distance2 = consensus_alignment2['editDistance']
+                        novel_alleles.append(best_allele2)
+                    if len(consensus_matches) == 1:
+                        # determine which consensus sequence did not match
+                        if consensus_matches[0] == 1:
+                            consensus_index = 0
+                        else:
+                            consensus_index = 1
+                        best_distance = len(consensus_seqs[consensus_index])
+                        best_allele = ""
+                        for allele_name, allele_sequence in alleles.items():
+                            allele_sequence_subset = allele_sequence[args.flank_length : -args.flank_length]
+                            consensus_alignment = edlib.align(consensus_seqs[consensus_index], allele_sequence_subset, mode = "NW", task = "path")
+                            if consensus_alignment['editDistance'] < best_distance:
+                                best_allele = allele_name
+                                best_distance = consensus_alignment['editDistance']
+                        novel_alleles.append(best_allele)
+                
+                # print consensus results   
+                if len(known_alleles) == 2:
+                    # het known
+                    print("/".join([known_alleles[0], known_alleles[1]]), sep=args.delimiter, file=results_file)
                 else:
-                    novel_alleles.append(allele)
+                    if len(novel_alleles) == 0:
+                        # hom known
+                        print("/".join([known_alleles[0], known_alleles[0]]), sep=args.delimiter, file=results_file)
+                    else: 
+                        novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
+                        if len(novel_alleles) == 2:
+                            # het novel
+                            novel_name2 = "_".join(["Novel_Similar", novel_alleles[1]])
+                            print("/".join([novel_name1, novel_name2]), sep=args.delimiter, file=results_file)
+                        else:
+                            if len(known_alleles) == 1 and len(novel_alleles) == 1:
+                                # het novel known
+                                print("/".join([novel_name1, known_alleles[0]]), sep=args.delimiter, file=results_file)
+                            else:
+                                # hom novel
+                                print("/".join([novel_name1, novel_name1]), sep=args.delimiter, file=results_file)
+                
+            # combined consensus and alignment
             else: 
-                novel_alleles.append(allele)
 
-        # if there are any novel alleles detected, add them to the top of the likelihood results
-        # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score            
-        if len(novel_alleles) == 1:
-            novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
-            if len(known_alleles) == 1:
-                # only possible if top geno is het
-                if len(consensus_seqs) == 1:
-                    # unexpected result: give arbitrary value of 99
-                    extra_name1 = "_".join(["Potential_False", novel_alleles[0]])
-                    print("/".join([known_alleles[0], extra_name1]), "99", sep=args.delimiter, file=results_file)
-                elif len(consensus_seqs) == 2:
-                    # two base alleles, one novel and one known (ex. NovelA/B)
+                # 9 possible outcomes:
+                # Num cons seqs | Num alleles | Num matches |
+                # --------------|-------------|-------------|
+                #             1 |           1 |          1  |   ex. A/A
+                #             1 |           1 |          0  |   ex. NovelA/NovelA
+                #             2 |           1 |          1  |   ex. NovelA/A
+                #             2 |           1 |          0  |   ex. NovelA.a/NovelA.b
+                #             1 |           2 |          1  |   ex. A/PotentialFalseB
+                #             1 |           2 |          0  |   ex. PotentialFalseOrNovelA/PotentialFalseOrNovelB
+                #             2 |           2 |          2  |   ex. A/B
+                #             2 |           2 |          1  |   ex. NovelA/B
+                #             2 |           2 |          0  |   ex. NovelA/NovelB
+
+                novel_alleles = []
+                known_alleles = []
+
+                for allele in top_genotype_split:
+                    allele_subsequence = alleles[allele][args.flank_length:-args.flank_length]
+                    # check for novel haplotypes
+                    if consensus_seqs[0] == allele_subsequence:
+                        known_alleles.append(allele)
+                    elif len(consensus_seqs) == 2:
+                        if consensus_seqs[1] == allele_subsequence:
+                            known_alleles.append(allele)
+                        else:
+                            novel_alleles.append(allele)
+                    else: 
+                        novel_alleles.append(allele)
+
+                # if there are any novel alleles detected, add them to the top of the likelihood results
+                # NOTE: value of 1 is to ensure novel genotype stays at the top of the list--it is not a likelihood score            
+                if len(novel_alleles) == 1:
+                    novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
+                    if len(known_alleles) == 1:
+                        # only possible if top geno is het
+                        if len(consensus_seqs) == 1:
+                            # unexpected result: give arbitrary value of 99
+                            extra_name1 = "_".join(["Potential_False", novel_alleles[0]])
+                            print("/".join([known_alleles[0], extra_name1]), "99", sep=args.delimiter, file=results_file)
+                        elif len(consensus_seqs) == 2:
+                            # two base alleles, one novel and one known (ex. NovelA/B)
+                            print("/".join([novel_name1, known_alleles[0]]), "1", sep=args.delimiter, file=results_file)
+                    elif len(known_alleles) == 0:
+                        # only possible if top geno is hom
+                        if len(consensus_seqs) == 1:
+                            # one base allele, both same novel (ex. NovelA/NovelA)
+                            print("/".join([novel_name1, novel_name1]), "1", sep=args.delimiter, file=results_file)
+                        elif len(consensus_seqs) == 2:
+                            # one base allele, two different novel alleles (ex. NovelA.a/NovelA.b)
+                            novel_name2 = "_".join(["Different_Novel_Similar", novel_alleles[0]])
+                            print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)
+                elif len(novel_alleles) == 2:
+                    # only possible if top geno is het
+                    if len(consensus_seqs) == 1:
+                        # unexpected result: give arbitrary value of 99
+                        extra_name1 = "_".join(["Potential_False_or_Novel", novel_alleles[0]])
+                        extra_name2 = "_".join(["Potential_False_or_Novel", novel_alleles[1]])
+                        print("/".join([extra_name1, extra_name2]), "99", sep=args.delimiter, file=results_file)
+                    elif len(consensus_seqs) == 2:
+                        # two base alleles, both novel (ex. NovelA/NovelB)
+                        novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
+                        novel_name2 = "_".join(["Novel_Similar", novel_alleles[1]])
+                        print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)  
+                elif len(novel_alleles) == 0 and len(known_alleles) == 1 and len(consensus_seqs) == 2: 
+                    # only possible if top geno is hom
+                    # one base allele, one novel and one known (ex. NovelA/A)
+                    novel_name1 = "_".join(["Novel_Similar", known_alleles[0]])
                     print("/".join([novel_name1, known_alleles[0]]), "1", sep=args.delimiter, file=results_file)
-            elif len(known_alleles) == 0:
-                # only possible if top geno is hom
-                if len(consensus_seqs) == 1:
-                    # one base allele, both same novel (ex. NovelA/NovelA)
-                    print("/".join([novel_name1, novel_name1]), "1", sep=args.delimiter, file=results_file)
-                elif len(consensus_seqs) == 2:
-                    # one base allele, two different novel alleles (ex. NovelA.a/NovelA.b)
-                    novel_name2 = "_".join(["Different_Novel_Similar", novel_alleles[0]])
-                    print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)
-        elif len(novel_alleles) == 2:
-            # only possible if top geno is het
-            if len(consensus_seqs) == 1:
-                # unexpected result: give arbitrary value of 99
-                extra_name1 = "_".join(["Potential_False_or_Novel", novel_alleles[0]])
-                extra_name2 = "_".join(["Potential_False_or_Novel", novel_alleles[1]])
-                print("/".join([extra_name1, extra_name2]), "99", sep=args.delimiter, file=results_file)
-            elif len(consensus_seqs) == 2:
-                # two base alleles, both novel (ex. NovelA/NovelB)
-                novel_name1 = "_".join(["Novel_Similar", novel_alleles[0]])
-                novel_name2 = "_".join(["Novel_Similar", novel_alleles[1]])
-                print("/".join([novel_name1, novel_name2]), "1", sep=args.delimiter, file=results_file)  
-        elif len(novel_alleles) == 0 and len(known_alleles) == 1 and len(consensus_seqs) == 2: 
-            # only possible if top geno is hom
-            # one base allele, one novel and one known (ex. NovelA/A)
-            novel_name1 = "_".join(["Novel_Similar", known_alleles[0]])
-            print("/".join([novel_name1, known_alleles[0]]), "1", sep=args.delimiter, file=results_file)
-        # elif len(known_alleles) == 1 and len(consensus_seqs) == 1: A/A printed below
-        # elif len(known_alleles) == 2: A/B printed below
-
-    else:   # haploid calling
-        all_scores = allele_edit_distances.sum().sort_values()
-        # TODO: check for novel alleles
+                # elif len(known_alleles) == 1 and len(consensus_seqs) == 1: A/A printed below
+                # elif len(known_alleles) == 2: A/B printed below
     
-    ### print results (allele or genotype name, score)
-    for name, score in all_scores.items():
-        print(name, score, sep=args.delimiter, file=results_file)
-        N_geno += 1
-        if (args.print_top_N_genos > 0) and (N_geno == args.print_top_N_genos):
-            break
+                ### print alignment results (allele or genotype name, score)
+                for name, score in all_scores.items():
+                    print(name, score, sep=args.delimiter, file=results_file)
+                    N_geno += 1
+                    if (args.print_top_N_genos > 0) and (N_geno == args.print_top_N_genos):
+                        break
 
 
 ### for generating quick counts
